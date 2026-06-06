@@ -118,6 +118,7 @@ app.use(
       connectSrc: ["'self'", allowedOrigin, 'https://oauth2.googleapis.com', 'https://accounts.google.com'],
       imgSrc: ["'self'", 'data:', 'https://images.unsplash.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      frameSrc: ["'self'","https://accounts.google.com"]
     },
   })
 )
