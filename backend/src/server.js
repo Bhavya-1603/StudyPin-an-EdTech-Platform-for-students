@@ -108,6 +108,12 @@ const notesRouter = createNotesRoutes({
 const userRouter = createUserRoutes({ usersCollection, notesCollection, requireAuth, recommendNotesForUser })
 
 const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173'
+app.get('/', (req, res) => {
+  res.json({
+    status: 'StudyPin API running',
+    message: 'Server is healthy 🚀'
+  })
+})
 app.use(helmet())
 app.use(
   helmet.contentSecurityPolicy({
@@ -136,6 +142,7 @@ app.use('/uploads', express.static(uploadsDir, { index: false }))
 app.use('/api/auth', authRateLimiter, authRouter)
 app.use('/api/notes', notesRouter)
 app.use('/api/users', userRouter)
+app.use('/api/auth', authRoutes)
 app.use(errorHandler)
 
 app.listen(port, () => {
