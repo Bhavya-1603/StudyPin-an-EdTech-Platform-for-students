@@ -8,13 +8,16 @@ import fs from 'fs'
 import crypto from 'crypto'
 import { extname, join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+
 import { connectDatabase } from './db/client.js'
 import { createEmbedding, isOpenAIConfigured } from './utils/openaiClient.js'
 import { recommendNotesForUser } from './utils/recommendation.js'
 import { notes as sampleNotes } from './data/sampleNotes.js'
+
 import createAuthRoutes from './routes/authRoutes.js'
 import createNotesRoutes from './routes/notesRoutes.js'
 import createUserRoutes from './routes/userRoutes.js'
+
 import { createRequireAuth } from './middleware/requireAuth.js'
 import { authRateLimiter } from './middleware/rateLimiter.js'
 import { errorHandler } from './middleware/errorHandler.js'
@@ -24,6 +27,9 @@ dotenv.config()
 const app = express()
 const port = process.env.PORT || 5000
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/* ---------------- FILE UPLOAD SETUP ---------------- */
+
 const uploadsDir = join(__dirname, '../uploads')
 const rawDir = join(uploadsDir, 'raw')
 
@@ -40,7 +46,11 @@ const allowedFileTypes = {
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, rawDir),
   filename: (req, file, cb) => {
-    const extension = allowedFileTypes[file.mimetype] || extname(file.originalname).toLowerCase() || '.bin'
+    const extension =
+      allowedFileTypes[file.mimetype] ||
+      extname(file.originalname).toLowerCase() ||
+      '.bin'
+
     const fileName = `${crypto.randomBytes(16).toString('hex')}${extension}`
     cb(null, fileName)
   },
@@ -53,13 +63,17 @@ const upload = multer({
     if (!allowedFileTypes[file.mimetype]) {
       return cb(new Error('Unsupported file type'))
     }
-    return cb(null, true)
+    cb(null, true)
   },
 })
+
+/* ---------------- GLOBAL STATE ---------------- */
 
 let notesCollection = null
 let usersCollection = null
 const openAIEnabled = isOpenAIConfigured()
+
+/* ---------------- DB INIT ---------------- */
 
 async function initializeDatabase() {
   try {
@@ -67,35 +81,43 @@ async function initializeDatabase() {
     notesCollection = db.collection('notes')
     usersCollection = db.collection('users')
 
-    await usersCollection.createIndex({ email: 1 }, { unique: true, background: true })
-    await notesCollection.createIndex({ subject: 1 }, { background: true })
-    await notesCollection.createIndex({ tags: 1 }, { background: true })
-    await notesCollection.createIndex({ createdAt: -1 }, { background: true })
+    await usersCollection.createIndex({ email: 1 }, { unique: true })
+    await notesCollection.createIndex({ subject: 1 })
+    await notesCollection.createIndex({ tags: 1 })
+    await notesCollection.createIndex({ createdAt: -1 })
 
     const count = await notesCollection.countDocuments()
+
     if (count === 0) {
       for (const note of sampleNotes) {
         const content = `${note.title} ${note.description} ${note.subject} ${(note.tags || []).join(' ')}`
-        const embedding = openAIEnabled ? await createEmbedding(content) : null
-        const seededNote = {
+
+        const embedding = openAIEnabled
+          ? await createEmbedding(content)
+          : null
+
+        await notesCollection.insertOne({
           ...note,
           embedding,
           createdAt: new Date(note.uploaded_at),
           source: 'seed',
-        }
-        await notesCollection.insertOne(seededNote)
+        })
       }
     }
 
     console.log('MongoDB connected and notes seeded')
   } catch (error) {
-    console.warn('MongoDB not available; running in demo mode. Error:', error.message)
+    console.warn('MongoDB not available; running in demo mode.', error.message)
   }
 }
 
+/* IMPORTANT: await DB before routes */
 await initializeDatabase()
 
+/* ---------------- ROUTES INIT ---------------- */
+
 const requireAuth = createRequireAuth(usersCollection)
+
 const authRouter = createAuthRoutes({ usersCollection })
 const notesRouter = createNotesRoutes({
   notesCollection,
@@ -105,45 +127,89 @@ const notesRouter = createNotesRoutes({
   createEmbedding,
   sampleNotes,
 })
-const userRouter = createUserRoutes({ usersCollection, notesCollection, requireAuth, recommendNotesForUser })
-
-const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173'
-app.get('/', (req, res) => {
-  res.json({
-    status: 'StudyPin API running',
-    message: 'Server is healthy 🚀'
-  })
+const userRouter = createUserRoutes({
+  usersCollection,
+  notesCollection,
+  requireAuth,
+  recommendNotesForUser,
 })
+
+/* ---------------- MIDDLEWARE ---------------- */
+
+const allowedOrigin =
+  process.env.CORS_ORIGIN || 'http://localhost:5173'
+
 app.use(helmet())
+
 app.use(
   helmet.contentSecurityPolicy({
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", 'https://accounts.google.com', 'https://apis.google.com', 'https://cdnjs.cloudflare.com'],
+      scriptSrc: [
+        "'self'",
+        'https://accounts.google.com',
+        'https://apis.google.com',
+        'https://cdnjs.cloudflare.com',
+      ],
       styleSrc: ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
-      connectSrc: ["'self'", allowedOrigin, 'https://oauth2.googleapis.com', 'https://accounts.google.com'],
+      connectSrc: [
+        "'self'",
+        allowedOrigin,
+        'https://oauth2.googleapis.com',
+        'https://accounts.google.com',
+      ],
       imgSrc: ["'self'", 'data:', 'https://images.unsplash.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-      frameSrc: ["'self'","https://accounts.google.com"]
+      frameSrc: ["'self'", 'https://accounts.google.com'],
     },
   })
 )
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://study-pin-frontend.vercel.app"
-  ],
-  credentials: true
-}))
+
+app.use(
+  cors({
+    origin: [
+      'http://localhost:5173',
+      'https://study-pin-frontend.vercel.app',
+    ],
+    credentials: true,
+  })
+)
+
 app.use(cookieParser())
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
+
+/* ---------------- HEALTH ROUTE ---------------- */
+
+app.get('/', (req, res) => {
+  res.json({
+    status: 'StudyPin API running',
+    message: 'Server is healthy 🚀',
+  })
+})
+
+app.get('/health', (req, res) => {
+  res.json({ ok: true })
+})
+
+/* ---------------- STATIC ---------------- */
+
 app.use('/uploads', express.static(uploadsDir, { index: false }))
+
+/* ---------------- API ROUTES ---------------- */
+
 app.use('/api/auth', authRateLimiter, authRouter)
 app.use('/api/notes', notesRouter)
 app.use('/api/users', userRouter)
-app.use('/api/auth', authRoutes)
+
+/* ❌ FIXED: removed broken line */
+/* app.use('/api/auth', authRoutes) ← THIS WAS CRASHING SERVER */
+
+/* ---------------- ERROR HANDLER ---------------- */
+
 app.use(errorHandler)
+
+/* ---------------- START SERVER ---------------- */
 
 app.listen(port, () => {
   console.log(`StudyPin backend running on http://localhost:${port}`)
