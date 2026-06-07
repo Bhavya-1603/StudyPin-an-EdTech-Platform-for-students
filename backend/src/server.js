@@ -14,7 +14,6 @@ import { createEmbedding, isOpenAIConfigured } from './utils/openaiClient.js'
 import { recommendNotesForUser } from './utils/recommendation.js'
 import { notes as sampleNotes } from './data/sampleNotes.js'
 
-import createAuthRoutes from './routes/authRoutes.js'
 import createNotesRoutes from './routes/notesRoutes.js'
 import createUserRoutes from './routes/userRoutes.js'
 
