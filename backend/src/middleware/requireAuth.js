@@ -1,40 +1,25 @@
-import { verifyJwtToken } from '../utils/auth.js'
-import { ObjectId } from 'mongodb'
+import admin from "../config/firebaseAdmin.js"
 
-export function createRequireAuth(usersCollection) {
-  return async function requireAuth(req, res, next) {
+export const requireAuth = async (req, res, next) => {
+  try {
     const header = req.headers.authorization
-    if (!header?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Authorization required' })
+
+    if (!header || !header.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Unauthorized" })
     }
 
-    const token = header.split(' ')[1]
-    try {
-      const payload = verifyJwtToken(token)
-      if (!usersCollection) {
-        return res.status(500).json({ error: 'Database is not available' })
-      }
+    const token = header.split(" ")[1]
 
-      const user = await usersCollection.findOne({
-        _id: new ObjectId(payload.id),
-        email: payload.email,
-      })
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid token' })
-      }
+    const decoded = await admin.auth().verifyIdToken(token)
 
-      req.user = {
-        id: user._id.toString(),
-        name: user.name,
-        email: user.email,
-        streak: user.streak || 0,
-        followedSubjects: user.followedSubjects || [],
-        savedTags: user.savedTags || [],
-      }
-
-      return next()
-    } catch (error) {
-      return res.status(401).json({ error: 'Invalid token' })
+    req.user = {
+      uid: decoded.uid,
+      email: decoded.email,
+      name: decoded.name || null
     }
+
+    next()
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid token" })
   }
 }
