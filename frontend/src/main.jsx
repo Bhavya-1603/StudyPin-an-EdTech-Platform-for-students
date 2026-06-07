@@ -15,4 +15,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </>
   </GoogleOAuthProvider>
 )
-console.log("APP STARTED")

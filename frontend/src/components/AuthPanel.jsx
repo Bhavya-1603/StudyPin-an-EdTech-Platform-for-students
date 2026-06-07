@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/useStore'
-import { loginUser, registerUser } from "../auth/firebaseAuth"
+import { loginUser, registerUser } from '../auth/firebaseAuth'
 
 function AuthPanel() {
   const navigate = useNavigate()
@@ -13,22 +13,21 @@ function AuthPanel() {
   const setUser = useAuthStore((state) => state.setUser)
 
   const [mode, setMode] = useState('login')
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+
   const [form, setForm] = useState({
     name: '',
     email: '',
     password: ''
   })
 
-  const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
   }
 
-  const switchMode = (newMode) => {
+  const resetForm = () => {
     setForm({ name: '', email: '', password: '' })
-    setMode(newMode)
   }
 
   const handleSubmit = async (e) => {
@@ -36,29 +35,31 @@ function AuthPanel() {
     setLoading(true)
 
     try {
-      let result
+      let userCred
 
-      if (mode === "register") {
-        result = await registerUser(form.email, form.password)
+      if (mode === 'register') {
+        userCred = await registerUser(form.email, form.password)
       } else {
-        result = await loginUser(form.email, form.password)
+        userCred = await loginUser(form.email, form.password)
       }
 
-      const user = result.user
+      const user = userCred.user
       const token = await user.getIdToken()
 
-      localStorage.setItem("token", token)
-      localStorage.setItem("user", JSON.stringify(user))
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify(user))
 
+      setToken(token)
+      setUser(user)
       setAuth({
         user,
         token,
-        status: "authenticated",
+        status: 'authenticated',
         error: null
       })
 
-      toast.success("Login successful")
-      navigate("/dashboard")
+      toast.success('Login successful')
+      navigate('/dashboard')
 
     } catch (err) {
       toast.error(err.message)
@@ -67,22 +68,16 @@ function AuthPanel() {
     }
   }
 
-
-
   return (
     <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
 
-      {/* HEADER */}
       <div className="mb-6">
-        <p className="text-sky-300 text-sm uppercase tracking-widest">
-          {mode}
-        </p>
-        <h2 className="text-white text-2xl font-bold mt-2">
+        <p className="text-sky-300 text-sm uppercase">{mode}</p>
+        <h2 className="text-white text-2xl font-bold">
           {mode === 'login' ? 'Welcome back' : 'Create account'}
         </h2>
       </div>
 
-      {/* FORM */}
       <form onSubmit={handleSubmit} className="space-y-4">
 
         {mode === 'register' && (
@@ -109,13 +104,12 @@ function AuthPanel() {
             onChange={handleChange('password')}
             className="input pr-10"
           />
-
           <button
             type="button"
             onClick={() => setShowPassword((p) => !p)}
-            className="absolute right-3 top-3 text-gray-400"
+            className="absolute right-3 top-3"
           >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            {showPassword ? <EyeOff /> : <Eye />}
           </button>
         </div>
 
@@ -123,18 +117,17 @@ function AuthPanel() {
           disabled={loading}
           className="w-full bg-sky-500 text-white py-3 rounded-xl"
         >
-          {loading ? 'Loading...' : mode === 'login' ? 'Login' : 'Create Account'}
+          {loading ? 'Loading...' : mode === 'login' ? 'Login' : 'Register'}
         </button>
       </form>
 
-      {/* SWITCH MODE */}
       <div className="mt-4 text-center text-sm text-gray-400">
         {mode === 'login' ? (
-          <button onClick={() => switchMode('register')}>
+          <button onClick={() => setMode('register')}>
             Create account
           </button>
         ) : (
-          <button onClick={() => switchMode('login')}>
+          <button onClick={() => setMode('login')}>
             Back to login
           </button>
         )}
