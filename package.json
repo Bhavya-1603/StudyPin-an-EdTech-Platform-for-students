@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
     "axios": "^1.17.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
@@ -30,22 +32,20 @@
     "nodemailer": "^8.0.10",
     "openai": "^4.9.0",
     "otp-generator": "^4.0.1",
+    "postcss": "^8.4.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^6.30.4",
+    "tailwindcss": "^3.4.4",
+    "tsx": "^4.19.2",
+    "vite": "^5.4.1",
     "zustand": "^4.4.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.1",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.4",
-    "tsx": "^4.19.2",
-    "vite": "^5.4.1"
+    "@types/react-dom": "^18.3.1"
   }
 }
