@@ -1,7 +1,49 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, Bookmark, Eye, Check, Download, FileText } from 'lucide-react'
+import { BookOpen, Bookmark, Eye, Check, Download, FileText, Atom, Landmark, Calculator, Code2, Library, Cpu } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import toast from 'react-hot-toast'
+
+function inferClientCategory(subject = '', title = '', tags = []) {
+  const text = `${subject} ${title} ${Array.isArray(tags) ? tags.join(' ') : tags}`.toLowerCase()
+  if (/math|calculus|algebra|geometry|statistic|trigonometr|integral|derivat|matric|matrix|linear algebra/.test(text)) return 'Math'
+  if (/histor|civiliz|empire|revolution|war|dynasty|colonial|republic|renaissance|archaeolog|monarchy|constitution/.test(text)) return 'History'
+  if (/comput|code|programm|software|algorithm|dsa|ai|ml|machine learn|neural|database|python|java|javascript|network|os|cyber/.test(text)) return 'Computer Science'
+  if (/literature|english|poetry|prose|novel|drama|shakespeare|rhetoric|grammar|linguistic|essay|author/.test(text)) return 'Literature'
+  if (/mechanic|circuit|thermodynam|electrical|electronic|civil|gate|aerospace|robotics|fluid|robot/.test(text)) return 'Engineering'
+  if (/science|physic|chem|bio|organic|optics|atomic|quantum|cell|genetics|ecolog|physiol|botany|zoolog|astronom|molecule/.test(text)) return 'Science'
+  return 'Science'
+}
+
+const CATEGORY_STYLES = {
+  Science: {
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    icon: Atom,
+  },
+  History: {
+    badge: 'bg-amber-50 text-amber-800 border-amber-200/80',
+    icon: Landmark,
+  },
+  Math: {
+    badge: 'bg-blue-50 text-blue-700 border-blue-200/80',
+    icon: Calculator,
+  },
+  'Computer Science': {
+    badge: 'bg-purple-50 text-purple-700 border-purple-200/80',
+    icon: Code2,
+  },
+  Literature: {
+    badge: 'bg-rose-50 text-rose-700 border-rose-200/80',
+    icon: Library,
+  },
+  Engineering: {
+    badge: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
+    icon: Cpu,
+  },
+  Other: {
+    badge: 'bg-slate-100 text-slate-700 border-slate-200',
+    icon: BookOpen,
+  },
+}
 
 function NoteCard({ note, onSave, isSaved = false }) {
   const storeSaveNote = useStore((state) => state.saveNote)
@@ -9,6 +51,10 @@ function NoteCard({ note, onSave, isSaved = false }) {
 
   const isActuallySaved = isSaved || savedNotes.some((n) => n.id === note.id)
   const [saved, setSaved] = useState(isActuallySaved)
+
+  const category = note.category || inferClientCategory(note.subject, note.title, note.tags)
+  const style = CATEGORY_STYLES[category] || CATEGORY_STYLES.Other
+  const CategoryIcon = style.icon || BookOpen
 
   useEffect(() => {
     setSaved(isSaved || savedNotes.some((n) => n.id === note.id))
@@ -49,13 +95,23 @@ function NoteCard({ note, onSave, isSaved = false }) {
           </div>
         )}
 
+        {/* Category Pill Overlay */}
+        <div className="absolute top-3 left-3">
+          <span
+            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold backdrop-blur-md shadow-sm border ${style.badge}`}
+          >
+            <CategoryIcon size={12} />
+            <span>{category}</span>
+          </span>
+        </div>
+
         <div className="absolute top-3 right-3">
           <button
             type="button"
             onClick={handleSaveToggle}
             className={`flex h-8 w-8 items-center justify-center rounded-lg backdrop-blur-md transition ${
               saved
-                ? 'bg-blue-600 text-white'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'bg-white/90 text-slate-600 hover:bg-white hover:text-slate-900 shadow-sm'
             }`}
             title={saved ? 'Remove from saved' : 'Save note'}
@@ -67,7 +123,7 @@ function NoteCard({ note, onSave, isSaved = false }) {
 
       <div className="flex flex-1 flex-col p-5">
         <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-          <span className="text-blue-700 font-semibold">{note.subject}</span>
+          <span className="text-slate-900 font-semibold">{note.subject}</span>
           <span aria-hidden="true">·</span>
           <span>{note.difficulty || 'Medium'}</span>
           {note.views !== undefined && (

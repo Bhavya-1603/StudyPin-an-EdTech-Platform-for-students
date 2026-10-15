@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl } from '../utils/api'
+import { apiUrl, fetchWithAuth } from '../utils/api'
 
 const defaultAuthState = {
   user: null,
@@ -36,6 +36,7 @@ export const useStore = create((set, get) => ({
     loading: false,
     error: null,
   },
+  categories: [],
 
   setAuth: (auth) => set({ auth }),
   setUser: (user) => set((state) => ({ auth: { ...state.auth, user } })),
@@ -44,36 +45,74 @@ export const useStore = create((set, get) => ({
   setAuthError: (error) => set((state) => ({ auth: { ...state.auth, error } })),
   clearAuth: () => set({ auth: { ...defaultAuthState }, savedNotes: [], myUploads: [] }),
 
-  // 1. Session initialization
+  // 1. Categories list with counts
+  loadCategories: async () => {
+    try {
+      const response = await fetch(apiUrl('/api/notes/categories'))
+      const data = await response.json()
+      if (response.ok && Array.isArray(data)) {
+        set({ categories: data })
+        return data
+      }
+    } catch {
+      // ignore
+    }
+  },
+
+  dismissNewUserWelcome: async () => {
+    try {
+      await fetchWithAuth('/api/auth/complete-onboarding', { method: 'POST' })
+    } catch {
+      // ignore
+    }
+    const currentUser = get().auth?.user
+    if (currentUser) {
+      const updatedUser = { ...currentUser, isNewUser: false, isReturningUser: true }
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      set((state) => ({ auth: { ...state.auth, user: updatedUser } }))
+    }
+  },
+
+  // 1. Session initialization and verification using JWT
   initializeSession: async () => {
     set((state) => ({ auth: { ...state.auth, status: 'loading', error: null } }))
     try {
       const storedToken = localStorage.getItem('token')
       const storedUser = localStorage.getItem('user')
 
-      const headers = {}
-      if (storedToken) headers.Authorization = `Bearer ${storedToken}`
-
-      const response = await fetch(apiUrl('/api/auth/refresh-token'), {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        if (storedToken && storedUser) {
-          const parsed = JSON.parse(storedUser)
-          set({ auth: { user: parsed, token: storedToken, status: 'authenticated', error: null } })
-          return { user: parsed, token: storedToken }
-        }
+      if (!storedToken) {
         set((state) => ({ auth: { ...state.auth, status: 'unauthenticated', token: null, user: null } }))
         return null
       }
 
-      localStorage.setItem('token', result.token)
-      localStorage.setItem('user', JSON.stringify(result.user))
-      set({ auth: { user: result.user, token: result.token, status: 'authenticated', error: null } })
-      return result
+      // Verify active session via JWT
+      const response = await fetchWithAuth('/api/auth/session')
+      const result = await response.json()
+
+      if (response.ok && result.authenticated && result.token) {
+        let finalUser = result.user
+        if (storedUser) {
+          try {
+            const parsedStored = JSON.parse(storedUser)
+            if (parsedStored.isNewUser !== undefined && result.user.isNewUser === undefined) {
+              finalUser = { ...result.user, isNewUser: parsedStored.isNewUser }
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        localStorage.setItem('token', result.token)
+        localStorage.setItem('user', JSON.stringify(finalUser))
+        set({ auth: { user: finalUser, token: result.token, status: 'authenticated', error: null } })
+        return { user: finalUser, token: result.token }
+      }
+
+      // Session token invalid or expired
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      set((state) => ({ auth: { ...state.auth, status: 'unauthenticated', token: null, user: null } }))
+      return null
     } catch {
       const storedToken = localStorage.getItem('token')
       const storedUser = localStorage.getItem('user')
@@ -93,10 +132,7 @@ export const useStore = create((set, get) => ({
 
   logout: async () => {
     try {
-      await fetch(apiUrl('/api/auth/logout'), {
-        method: 'POST',
-        credentials: 'include',
-      })
+      await fetchWithAuth('/api/auth/logout', { method: 'POST' })
     } catch {
       // ignore
     }
@@ -105,13 +141,14 @@ export const useStore = create((set, get) => ({
     set({ auth: { ...defaultAuthState }, savedNotes: [], myUploads: [] })
   },
 
-  // 2. Load all notes with search and subject
-  loadNotes: async (subject = '', query = '') => {
+  // 2. Load all notes with search, subject, and category
+  loadNotes: async (subject = '', query = '', category = '') => {
     set((state) => ({ resources: { ...state.resources, loading: true, error: null } }))
     try {
       const params = []
       if (query) params.push(`q=${encodeURIComponent(query)}`)
       if (subject && subject !== 'All') params.push(`subject=${encodeURIComponent(subject)}`)
+      if (category && category !== 'All') params.push(`category=${encodeURIComponent(category)}`)
       const url = apiUrl(`/api/notes${params.length ? `?${params.join('&')}` : ''}`)
       const response = await fetch(url)
       const data = await response.json()
@@ -127,13 +164,10 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // 3. Load saved notes
+  // 3. Load saved notes with authenticated session
   loadSavedNotes: async () => {
     try {
-      const token = get().auth?.token || localStorage.getItem('token') || 'demo-user-token'
-      const response = await fetch(apiUrl('/api/notes/saved'), {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await fetchWithAuth('/api/notes/saved')
       const data = await response.json()
       if (response.ok && Array.isArray(data)) {
         set({ savedNotes: data })
@@ -148,11 +182,7 @@ export const useStore = create((set, get) => ({
   // 4. Save or bookmark note
   saveNote: async (note, shouldSave = true) => {
     try {
-      const token = get().auth?.token || localStorage.getItem('token') || 'demo-user-token'
-      const response = await fetch(apiUrl(`/api/notes/${note.id}/save`), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await fetchWithAuth(`/api/notes/${note.id}/save`, { method: 'POST' })
       const result = await response.json()
 
       const currentSaved = get().savedNotes
@@ -165,7 +195,6 @@ export const useStore = create((set, get) => ({
       }
       return result
     } catch {
-      // optimistic fallback
       const currentSaved = get().savedNotes
       if (shouldSave) {
         set({ savedNotes: [note, ...currentSaved] })
@@ -178,11 +207,7 @@ export const useStore = create((set, get) => ({
   // 5. Delete note
   deleteNote: async (noteId) => {
     try {
-      const token = get().auth?.token || localStorage.getItem('token') || 'demo-user-token'
-      await fetch(apiUrl(`/api/notes/${noteId}`), {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      await fetchWithAuth(`/api/notes/${noteId}`, { method: 'DELETE' })
       set((state) => ({
         notes: state.notes.filter((n) => n.id !== noteId),
         savedNotes: state.savedNotes.filter((n) => n.id !== noteId),
@@ -201,19 +226,17 @@ export const useStore = create((set, get) => ({
       resources: { ...state.resources, notes: [note, ...state.resources.notes] },
     })),
 
-  // 7. Load real student dashboard
+  // 7. Load real student dashboard with JWT verification
   loadDashboardData: async () => {
     try {
-      const token = get().auth?.token || localStorage.getItem('token') || 'demo-user-token'
-      const response = await fetch(apiUrl('/api/users/dashboard'), {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await fetchWithAuth('/api/users/dashboard')
       const data = await response.json()
       if (response.ok && data.stats) {
         set((state) => ({
           dashboard: {
             ...state.dashboard,
             stats: data.stats,
+            isNewUser: data.isNewUser,
             activities: data.activities || [],
             deadlines: data.deadlines || [],
             goals: data.goals || [],
@@ -229,13 +252,9 @@ export const useStore = create((set, get) => ({
   // 8. Add deadline
   addDeadline: async (deadline) => {
     try {
-      const token = get().auth?.token || localStorage.getItem('token') || 'demo-user-token'
-      const response = await fetch(apiUrl('/api/users/deadlines'), {
+      const response = await fetchWithAuth('/api/users/deadlines', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(deadline),
       })
       const saved = await response.json()
@@ -257,13 +276,9 @@ export const useStore = create((set, get) => ({
   // 9. Toggle deadline
   toggleDeadline: async (deadlineId, completed) => {
     try {
-      const token = get().auth?.token || localStorage.getItem('token') || 'demo-user-token'
-      await fetch(apiUrl(`/api/users/deadlines/${deadlineId}`), {
+      await fetchWithAuth(`/api/users/deadlines/${deadlineId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed }),
       })
     } catch {
@@ -282,13 +297,9 @@ export const useStore = create((set, get) => ({
   // 10. Add goal
   addGoal: async (goal) => {
     try {
-      const token = get().auth?.token || localStorage.getItem('token') || 'demo-user-token'
-      const response = await fetch(apiUrl('/api/users/goals'), {
+      const response = await fetchWithAuth('/api/users/goals', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(goal),
       })
       const saved = await response.json()
@@ -310,13 +321,9 @@ export const useStore = create((set, get) => ({
   // 11. Update goal progress
   updateGoalProgress: async (goalId, current) => {
     try {
-      const token = get().auth?.token || localStorage.getItem('token') || 'demo-user-token'
-      await fetch(apiUrl(`/api/users/goals/${goalId}`), {
+      await fetchWithAuth(`/api/users/goals/${goalId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ current }),
       })
     } catch {

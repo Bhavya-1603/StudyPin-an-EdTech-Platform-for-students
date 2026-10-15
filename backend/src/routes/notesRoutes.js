@@ -3,17 +3,43 @@ import { escapeRegex, normalizeTags, sanitizeString } from '../utils/validation.
 import { uploadRateLimiter } from '../middleware/rateLimiter.js'
 import { generateStudyInsights } from '../utils/fileProcessing.js'
 
+export function inferCategory(subject = '', title = '', tags = []) {
+  const text = `${subject} ${title} ${Array.isArray(tags) ? tags.join(' ') : tags}`.toLowerCase()
+  
+  if (/math|calculus|algebra|geometry|statistic|trigonometr|integral|derivat|matric|matrix|linear algebra/.test(text)) {
+    return 'Math'
+  }
+  if (/histor|civiliz|empire|revolution|war|dynasty|colonial|republic|renaissance|archaeolog|monarchy|constitution/.test(text)) {
+    return 'History'
+  }
+  if (/comput|code|programm|software|algorithm|dsa|ai|ml|machine learn|neural|database|python|java|javascript|network|os|cyber/.test(text)) {
+    return 'Computer Science'
+  }
+  if (/literature|english|poetry|prose|novel|drama|shakespeare|rhetoric|grammar|linguistic|essay|author/.test(text)) {
+    return 'Literature'
+  }
+  if (/mechanic|circuit|thermodynam|electrical|electronic|civil|gate|aerospace|robotics|fluid|robot/.test(text)) {
+    return 'Engineering'
+  }
+  if (/science|physic|chem|bio|organic|optics|atomic|quantum|cell|genetics|ecolog|physiol|botany|zoolog|astronom|molecule/.test(text)) {
+    return 'Science'
+  }
+  return 'Science'
+}
+
 function normalizeNote(note) {
   if (!note) return null
+  const category = note.category || inferCategory(note.subject, note.title, note.tags) || 'Science'
   return {
     ...note,
+    category,
     id: note._id?.toString?.() || note.id,
     uploaded_at: note.uploaded_at || note.createdAt || new Date().toISOString(),
     _id: undefined,
   }
 }
 
-function buildNoteFilter(query, subject) {
+function buildNoteFilter(query, subject, category) {
   const filter = {}
   if (query) {
     const escaped = escapeRegex(query)
@@ -22,11 +48,15 @@ function buildNoteFilter(query, subject) {
       { title: regex },
       { description: regex },
       { subject: regex },
+      { category: regex },
       { tags: regex },
     ]
   }
   if (subject && subject !== 'All') {
     filter.subject = sanitizeString(subject)
+  }
+  if (category && category !== 'All') {
+    filter.category = sanitizeString(category)
   }
   return filter
 }
@@ -41,12 +71,13 @@ export default function createNotesRoutes({
 }) {
   const router = express.Router()
 
-  // 1. GET /api/notes: Get all notes with optional search & subject filter
+  // 1. GET /api/notes: Get all notes with optional search, subject & category filter
   router.get('/', async (req, res) => {
     try {
       const query = sanitizeString(req.query.q ?? '')
       const subject = sanitizeString(req.query.subject ?? '')
-      const filter = buildNoteFilter(query, subject)
+      const category = sanitizeString(req.query.category ?? '')
+      const filter = buildNoteFilter(query, subject, category)
 
       if (!notesCollection) {
         return res.json([])
@@ -59,25 +90,69 @@ export default function createNotesRoutes({
     }
   })
 
-  // 2. GET /api/notes/subjects: Get all distinct subjects in the database
+  // 2. GET /api/notes/categories: Get category summary with count of notes
+  router.get('/categories', async (req, res) => {
+    try {
+      const standardCategories = ['Science', 'History', 'Math', 'Computer Science', 'Literature', 'Engineering', 'Other']
+      let allNotes = []
+      if (notesCollection) {
+        allNotes = await notesCollection.find({}).toArray()
+      }
+
+      const counts = { All: allNotes.length }
+      standardCategories.forEach((cat) => {
+        counts[cat] = 0
+      })
+
+      for (const note of allNotes) {
+        const cat = note.category || inferCategory(note.subject, note.title, note.tags)
+        if (counts[cat] !== undefined) {
+          counts[cat] += 1
+        } else {
+          counts['Other'] = (counts['Other'] || 0) + 1
+        }
+      }
+
+      const categoryList = [
+        { name: 'All', count: counts.All, label: 'All Resources' },
+        ...standardCategories.map((name) => ({
+          name,
+          count: counts[name] || 0,
+          label: name,
+        })),
+      ]
+
+      return res.json(categoryList)
+    } catch (err) {
+      return res.json([
+        { name: 'All', count: 0, label: 'All Resources' },
+        { name: 'Science', count: 0, label: 'Science' },
+        { name: 'History', count: 0, label: 'History' },
+        { name: 'Math', count: 0, label: 'Math' },
+        { name: 'Computer Science', count: 0, label: 'Computer Science' },
+      ])
+    }
+  })
+
+  // 3. GET /api/notes/subjects: Get all distinct subjects in the database
   router.get('/subjects', async (req, res) => {
     try {
       if (!notesCollection) {
-        return res.json(['Physics', 'Mathematics', 'Computer Science', 'Chemistry', 'Biology', 'Engineering'])
+        return res.json(['Physics', 'Mathematics', 'Computer Science', 'History', 'Chemistry', 'Biology', 'Engineering', 'Literature'])
       }
 
       const subjects = await notesCollection.distinct('subject')
       if (!subjects || subjects.length === 0) {
-        return res.json(['Physics', 'Mathematics', 'Computer Science', 'Chemistry', 'Biology', 'Engineering'])
+        return res.json(['Physics', 'Mathematics', 'Computer Science', 'History', 'Chemistry', 'Biology', 'Engineering', 'Literature'])
       }
       subjects.sort()
       return res.json(subjects)
     } catch {
-      return res.json(['Physics', 'Mathematics', 'Computer Science', 'Chemistry', 'Biology', 'Engineering'])
+      return res.json(['Physics', 'Mathematics', 'Computer Science', 'History', 'Chemistry', 'Biology', 'Engineering', 'Literature'])
     }
   })
 
-  // 3. GET /api/notes/saved: Get all notes saved by the current user
+  // 4. GET /api/notes/saved: Get all notes saved by the current user
   router.get('/saved', requireAuth, async (req, res) => {
     try {
       if (!usersCollection || !notesCollection) {
@@ -107,7 +182,7 @@ export default function createNotesRoutes({
     }
   })
 
-  // 4. GET /api/notes/my-uploads: Get all notes uploaded by the current user
+  // 5. GET /api/notes/my-uploads: Get all notes uploaded by the current user
   router.get('/my-uploads', requireAuth, async (req, res) => {
     try {
       if (!notesCollection) {
@@ -131,12 +206,13 @@ export default function createNotesRoutes({
     }
   })
 
-  // 5. POST /api/notes/upload: Upload real note file with analysis
+  // 6. POST /api/notes/upload: Upload real note file with categorized metadata and analysis
   router.post('/upload', requireAuth, uploadRateLimiter, upload.single('file'), async (req, res) => {
     try {
       const title = sanitizeString(req.body.title)
       const description = sanitizeString(req.body.description)
-      const subject = sanitizeString(req.body.subject) || 'Mathematics'
+      const rawCategory = sanitizeString(req.body.category)
+      const subject = sanitizeString(req.body.subject) || 'Science'
       const tags = normalizeTags(req.body.tags)
       const file = req.file
 
@@ -144,14 +220,18 @@ export default function createNotesRoutes({
         return res.status(400).json({ error: 'Title, description, and file upload are required' })
       }
 
-      // Generate analysis based on actual uploaded file
+      // Establish explicit or inferred category (e.g., 'Science', 'History', 'Math', etc.)
+      const category = rawCategory || inferCategory(subject, title, tags)
+
+      // Generate analysis based on actual uploaded file and category
       const baseInsights = generateStudyInsights(
-        `${title}. ${description}. Subject: ${subject}. Tags: ${tags.join(', ')}`
+        `${title}. ${description}. Category: ${category}. Subject: ${subject}. Tags: ${tags.join(', ')}`
       )
 
       const note = {
         title,
         description,
+        category,
         subject,
         tags,
         file_url: `/uploads/raw/${file.filename}`,
@@ -172,14 +252,14 @@ export default function createNotesRoutes({
         basedOnYourNotes: true,
         analysis: {
           summary: baseInsights.detailedSummary || `Extracted summary and key review topics for ${file.originalname}.`,
-          keyTopics: baseInsights.keyTopics || [subject, 'Formulas', 'Key Concepts'],
+          keyTopics: baseInsights.keyTopics || [category, subject, 'Key Concepts'],
           difficultyScore: baseInsights.difficultyScore || 50,
           flashcards: baseInsights.flashcards || [],
         },
         createdAt: new Date(),
       }
 
-      const content = `${title} ${description} ${subject} ${note.tags.join(' ')}`
+      const content = `${title} ${description} ${category} ${subject} ${note.tags.join(' ')}`
       if (openAIEnabled && createEmbedding) {
         try {
           note.embedding = await createEmbedding(content)
@@ -196,7 +276,7 @@ export default function createNotesRoutes({
 
       const insertedNote = { ...note, id: insertedId }
 
-      // Log real user activity
+      // Log real user activity with category context
       if (usersCollection) {
         try {
           await usersCollection.findOneAndUpdate(
@@ -208,12 +288,13 @@ export default function createNotesRoutes({
                     {
                       id: 'act-' + Date.now(),
                       type: 'upload',
-                      title: `Uploaded study material: "${title}"`,
+                      title: `Uploaded ${category} note: "${title}"`,
+                      category,
                       subject,
                       time: 'Just now',
                       score: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
                       actionText: 'View Note',
-                      link: `/explore?subject=${encodeURIComponent(subject)}`,
+                      link: `/explore?category=${encodeURIComponent(category)}`,
                       createdAt: new Date(),
                     },
                   ],
@@ -234,7 +315,7 @@ export default function createNotesRoutes({
     }
   })
 
-  // 6. POST /api/notes/:id/save: Toggle saving/bookmarking a note
+  // 7. POST /api/notes/:id/save: Toggle saving/bookmarking a note
   router.post('/:id/save', requireAuth, async (req, res) => {
     try {
       const noteId = req.params.id
@@ -302,7 +383,7 @@ export default function createNotesRoutes({
     }
   })
 
-  // 7. DELETE /api/notes/:id: Delete note uploaded by user
+  // 8. DELETE /api/notes/:id: Delete note uploaded by user
   router.delete('/:id', requireAuth, async (req, res) => {
     try {
       const noteId = req.params.id

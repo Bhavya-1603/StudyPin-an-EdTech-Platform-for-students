@@ -12,7 +12,15 @@ import {
   ChevronRight,
   FileText,
   UploadCloud,
-  Bookmark
+  Bookmark,
+  Atom,
+  Landmark,
+  Calculator,
+  Code2,
+  Library,
+  Cpu,
+  Layers,
+  Sparkles,
 } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
@@ -20,12 +28,67 @@ import { ROUTES } from '../../constants/routes'
 import { useAuthStore, useStore } from '../../store/useStore'
 import toast from 'react-hot-toast'
 
+export function inferClientCategory(subject = '', title = '', tags = []) {
+  const text = `${subject} ${title} ${Array.isArray(tags) ? tags.join(' ') : tags}`.toLowerCase()
+  if (/math|calculus|algebra|geometry|statistic|trigonometr|integral|derivat|matric|matrix|linear algebra/.test(text)) return 'Math'
+  if (/histor|civiliz|empire|revolution|war|dynasty|colonial|republic|renaissance|archaeolog|monarchy|constitution/.test(text)) return 'History'
+  if (/comput|code|programm|software|algorithm|dsa|ai|ml|machine learn|neural|database|python|java|javascript|network|os|cyber/.test(text)) return 'Computer Science'
+  if (/literature|english|poetry|prose|novel|drama|shakespeare|rhetoric|grammar|linguistic|essay|author/.test(text)) return 'Literature'
+  if (/mechanic|circuit|thermodynam|electrical|electronic|civil|gate|aerospace|robotics|fluid|robot/.test(text)) return 'Engineering'
+  if (/science|physic|chem|bio|organic|optics|atomic|quantum|cell|genetics|ecolog|physiol|botany|zoolog|astronom|molecule/.test(text)) return 'Science'
+  return 'Science'
+}
+
+export const CATEGORY_STYLES = {
+  All: {
+    badge: 'bg-slate-100 text-slate-800 border-slate-200',
+    dot: 'bg-slate-500',
+    icon: BookOpen,
+  },
+  Science: {
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    dot: 'bg-emerald-500',
+    icon: Atom,
+  },
+  History: {
+    badge: 'bg-amber-50 text-amber-800 border-amber-200/80',
+    dot: 'bg-amber-500',
+    icon: Landmark,
+  },
+  Math: {
+    badge: 'bg-blue-50 text-blue-700 border-blue-200/80',
+    dot: 'bg-blue-500',
+    icon: Calculator,
+  },
+  'Computer Science': {
+    badge: 'bg-purple-50 text-purple-700 border-purple-200/80',
+    dot: 'bg-purple-500',
+    icon: Code2,
+  },
+  Literature: {
+    badge: 'bg-rose-50 text-rose-700 border-rose-200/80',
+    dot: 'bg-rose-500',
+    icon: Library,
+  },
+  Engineering: {
+    badge: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
+    dot: 'bg-indigo-500',
+    icon: Cpu,
+  },
+  Other: {
+    badge: 'bg-slate-100 text-slate-700 border-slate-200',
+    dot: 'bg-slate-500',
+    icon: BookOpen,
+  },
+}
+
 export default function StudentDashboard() {
   const user = useAuthStore((state) => state.auth?.user)
   const notes = useStore((state) => state.notes)
   const savedNotes = useStore((state) => state.savedNotes)
   const dashboard = useStore((state) => state.dashboard)
   const loadDashboardData = useStore((state) => state.loadDashboardData)
+  const dismissNewUserWelcome = useStore((state) => state.dismissNewUserWelcome)
   const addDeadline = useStore((state) => state.addDeadline)
   const toggleDeadline = useStore((state) => state.toggleDeadline)
   const addGoal = useStore((state) => state.addGoal)
@@ -33,6 +96,7 @@ export default function StudentDashboard() {
   const loadNotes = useStore((state) => state.loadNotes)
   const loadSavedNotes = useStore((state) => state.loadSavedNotes)
 
+  const [categoryFilter, setCategoryFilter] = useState('All')
   const [activityFilter, setActivityFilter] = useState('all')
 
   // Forms
@@ -109,6 +173,36 @@ export default function StudentDashboard() {
   const activities = dashboard.activities || []
   const stats = dashboard.stats || {}
 
+  const categorizedNotes = notes.map((n) => ({
+    ...n,
+    category: n.category || inferClientCategory(n.subject, n.title, n.tags),
+  }))
+
+  const categoryCounts = {
+    All: categorizedNotes.length,
+    Science: 0,
+    History: 0,
+    Math: 0,
+    'Computer Science': 0,
+    Literature: 0,
+    Engineering: 0,
+    Other: 0,
+  }
+
+  categorizedNotes.forEach((n) => {
+    const cat = n.category
+    if (categoryCounts[cat] !== undefined) {
+      categoryCounts[cat] += 1
+    } else {
+      categoryCounts['Other'] = (categoryCounts['Other'] || 0) + 1
+    }
+  })
+
+  const displayedNotes = categorizedNotes.filter((n) => {
+    if (categoryFilter === 'All') return true
+    return n.category?.toLowerCase() === categoryFilter.toLowerCase()
+  })
+
   const filteredActivities = activities.filter((act) => {
     if (activityFilter === 'all') return true
     return act.type === activityFilter
@@ -118,6 +212,8 @@ export default function StudentDashboard() {
   const activeDeadlinesCount = deadlines.filter((d) => !d.completed).length
   const completedGoalsCount = goals.filter((g) => g.current >= g.target).length
 
+  const isNewUser = Boolean(user?.isNewUser || dashboard.isNewUser)
+
   return (
     <div className="space-y-8 pb-12">
       {/* 1. WELCOME HEADER */}
@@ -125,17 +221,35 @@ export default function StudentDashboard() {
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-600">
-              <span>Academic Workspace</span>
-              <span aria-hidden="true">·</span>
-              <span>Personalized Study Hub</span>
+              {isNewUser ? (
+                <>
+                  <span>New Student Workspace</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Getting Started</span>
+                </>
+              ) : (
+                <>
+                  <span>Academic Workspace</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Personalized Study Hub</span>
+                </>
+              )}
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Welcome back, {studentName}
+              {isNewUser ? `Welcome to StudyPin, ${studentName}!` : `Welcome back, ${studentName}`}
             </h1>
             <p className="text-sm text-slate-500 max-w-2xl">
-              You have <span className="font-semibold text-amber-700">{activeDeadlinesCount} pending deadlines</span>,{' '}
-              <span className="font-semibold text-blue-700">{goals.length} active study goals</span>, and{' '}
-              <span className="font-semibold text-slate-800">{notes.length} notes</span> available in your workspace.
+              {isNewUser ? (
+                <span>
+                  Your workspace is ready. Upload your first lecture notes or bookmark study guides in Explore to track your upcoming deadlines and study milestones.
+                </span>
+              ) : (
+                <>
+                  You have <span className="font-semibold text-amber-700">{activeDeadlinesCount} pending deadlines</span>,{' '}
+                  <span className="font-semibold text-blue-700">{goals.length} active study goals</span>, and{' '}
+                  <span className="font-semibold text-slate-800">{notes.length} notes</span> available in your workspace.
+                </>
+              )}
             </p>
           </div>
 
@@ -155,6 +269,66 @@ export default function StudentDashboard() {
           </div>
         </div>
       </section>
+
+      {/* ONBOARDING QUICK START FOR NEW STUDENTS */}
+      {isNewUser && (
+        <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-blue-200/60 pb-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Quick Start Checklist</p>
+              <h2 className="text-base font-bold text-slate-900">Set up your student workspace in 3 steps</h2>
+            </div>
+            <button
+              type="button"
+              onClick={dismissNewUserWelcome}
+              className="text-xs font-semibold text-blue-700 hover:text-blue-900 transition"
+            >
+              I'm all set, dismiss guide →
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-white bg-white/90 p-4 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 mb-2">1</span>
+                <h3 className="text-sm font-semibold text-slate-900">Upload First Note</h3>
+                <p className="mt-1 text-xs text-slate-500">Add a lecture PDF or slides to extract key concepts.</p>
+              </div>
+              <div className="mt-4">
+                <Button to={ROUTES.UPLOAD} variant="primary" size="sm" className="w-full">
+                  Upload Notes
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white bg-white/90 p-4 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 mb-2">2</span>
+                <h3 className="text-sm font-semibold text-slate-900">Set a Study Goal</h3>
+                <p className="mt-1 text-xs text-slate-500">Track target chapters or problems to study this week.</p>
+              </div>
+              <div className="mt-4">
+                <Button onClick={() => setShowGoalForm(true)} variant="secondary" size="sm" className="w-full">
+                  + Create Goal
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white bg-white/90 p-4 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 mb-2">3</span>
+                <h3 className="text-sm font-semibold text-slate-900">Add an Exam Deadline</h3>
+                <p className="mt-1 text-xs text-slate-500">Keep track of test dates, problem sets, and submission days.</p>
+              </div>
+              <div className="mt-4">
+                <Button onClick={() => setShowDeadlineForm(true)} variant="secondary" size="sm" className="w-full">
+                  + Add Deadline
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* 2. OVERVIEW STATISTICS */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -299,67 +473,158 @@ export default function StudentDashboard() {
             </div>
           </section>
 
-          {/* ACTIVE LIBRARY NOTES */}
+          {/* ACTIVE LIBRARY NOTES & CATEGORY FILTER */}
           <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Your Study Resources</h2>
-                <p className="text-xs text-slate-500">Access your uploaded notes and saved guides</p>
+                <p className="text-xs text-slate-500">Filter your uploaded notes and saved guides by academic field</p>
               </div>
-              <Link to={ROUTES.EXPLORE} className="text-xs font-semibold text-blue-600 hover:text-blue-800">
-                Explore All Notes →
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  to={ROUTES.UPLOAD}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
+                >
+                  <Plus size={14} />
+                  <span>Upload Note</span>
+                </Link>
+                <span className="text-slate-300">|</span>
+                <Link to={ROUTES.EXPLORE} className="text-xs font-semibold text-slate-600 hover:text-slate-900">
+                  Explore Catalog →
+                </Link>
+              </div>
             </div>
 
-            <div className="mt-4">
-              {notes.length > 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {notes.slice(0, 4).map((note) => (
-                    <div
-                      key={note.id}
-                      className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 transition hover:bg-slate-50 hover:border-slate-300 flex flex-col justify-between"
+            {/* CATEGORY FILTER BUTTONS */}
+            <div className="mt-4 flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-4">
+              {['All', 'Science', 'History', 'Math', 'Computer Science', 'Literature', 'Engineering'].map((catKey) => {
+                const isSelected = categoryFilter.toLowerCase() === catKey.toLowerCase()
+                const count = categoryCounts[catKey] ?? 0
+                const style = CATEGORY_STYLES[catKey]
+                const Icon = style?.icon || BookOpen
+
+                return (
+                  <button
+                    key={catKey}
+                    type="button"
+                    onClick={() => setCategoryFilter(catKey)}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition ${
+                      isSelected
+                        ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                    }`}
+                  >
+                    {catKey !== 'All' && (
+                      <Icon size={13} className={isSelected ? 'text-white' : 'text-slate-400'} />
+                    )}
+                    <span>{catKey === 'All' ? 'All' : catKey}</span>
+                    <span
+                      className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                        isSelected ? 'bg-blue-700/80 text-white' : 'bg-slate-200/80 text-slate-600'
+                      }`}
                     >
-                      <div>
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span className="font-semibold text-blue-700">{note.subject}</span>
-                          <span>{note.difficulty || 'Medium'}</span>
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* FILTERED RESOURCE CARDS */}
+            <div className="mt-4">
+              {displayedNotes.length > 0 ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {displayedNotes.slice(0, 6).map((note) => {
+                    const style = CATEGORY_STYLES[note.category] || CATEGORY_STYLES.Other
+                    const CategoryIcon = style.icon || BookOpen
+                    return (
+                      <div
+                        key={note.id}
+                        className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 transition hover:bg-slate-50 hover:border-slate-300 flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold border ${style.badge}`}
+                            >
+                              <CategoryIcon size={11} />
+                              <span>{note.category}</span>
+                            </span>
+                            <span className="font-medium text-slate-600">{note.subject}</span>
+                          </div>
+
+                          <h3 className="mt-2.5 text-sm font-semibold text-slate-900 line-clamp-1">{note.title}</h3>
+                          <p className="mt-1 text-xs text-slate-600 line-clamp-2">{note.description}</p>
+
+                          {note.tags && note.tags.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {note.tags.slice(0, 2).map((t) => (
+                                <span
+                                  key={t}
+                                  className="rounded bg-white border border-slate-200/70 px-1.5 py-0.5 text-[10px] text-slate-500"
+                                >
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <h3 className="mt-2 text-sm font-semibold text-slate-900 line-clamp-1">{note.title}</h3>
-                        <p className="mt-1 text-xs text-slate-600 line-clamp-2">{note.description}</p>
+
+                        <div className="mt-4 flex items-center justify-between border-t border-slate-200/60 pt-3 text-xs">
+                          <span className="text-slate-500">By {note.uploader}</span>
+                          {note.file_url && note.file_url !== '#' ? (
+                            <a
+                              href={note.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-semibold text-blue-600 hover:text-blue-800"
+                            >
+                              Download File →
+                            </a>
+                          ) : (
+                            <Link
+                              to={`${ROUTES.EXPLORE}?category=${encodeURIComponent(note.category)}&subject=${encodeURIComponent(note.subject)}`}
+                              className="font-semibold text-blue-600 hover:text-blue-800"
+                            >
+                              Study Note →
+                            </Link>
+                          )}
+                        </div>
                       </div>
-                      <div className="mt-4 flex items-center justify-between border-t border-slate-200/60 pt-3 text-xs">
-                        <span className="text-slate-500">By {note.uploader}</span>
-                        {note.file_url && note.file_url !== '#' ? (
-                          <a
-                            href={note.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-semibold text-blue-600 hover:text-blue-800"
-                          >
-                            Download File →
-                          </a>
-                        ) : (
-                          <Link
-                            to={`${ROUTES.EXPLORE}?subject=${encodeURIComponent(note.subject)}`}
-                            className="font-semibold text-blue-600 hover:text-blue-800"
-                          >
-                            Study Note →
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
-                <div className="py-8 text-center text-xs text-slate-500">
-                  <p className="font-medium text-slate-700">No notes in your workspace yet.</p>
-                  <p className="mt-1">Upload a PDF or lecture notes to get started.</p>
-                  <Link
-                    to={ROUTES.UPLOAD}
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
-                  >
-                    <span>Upload Notes</span>
-                  </Link>
+                <div className="py-10 text-center text-xs text-slate-500">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <BookOpen size={20} />
+                  </div>
+                  <p className="mt-3 font-semibold text-slate-800 text-sm">
+                    No {categoryFilter === 'All' ? '' : `${categoryFilter} `}resources found
+                  </p>
+                  <p className="mt-1 text-slate-500 max-w-sm mx-auto">
+                    {categoryFilter === 'All'
+                      ? 'Upload your first study document to build your personalized resource library.'
+                      : `You don't have any notes filed under ${categoryFilter} yet. Upload notes to index them here.`}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <Link
+                      to={`/upload?category=${encodeURIComponent(categoryFilter === 'All' ? 'Science' : categoryFilter)}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+                    >
+                      <UploadCloud size={14} />
+                      <span>Upload {categoryFilter === 'All' ? 'Notes' : `${categoryFilter} Notes`}</span>
+                    </Link>
+                    {categoryFilter !== 'All' && (
+                      <button
+                        type="button"
+                        onClick={() => setCategoryFilter('All')}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Show All Categories
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

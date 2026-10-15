@@ -6,15 +6,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'studypin-default-secret-key-2026'
 export function createRequireAuth(usersCollection) {
   return async function requireAuthMiddleware(req, res, next) {
     try {
+      let token = null
       const header = req.headers.authorization
 
-      if (!header || !header.startsWith('Bearer ')) {
-        return res.status(401).json({ message: 'Unauthorized', error: 'Authentication token required' })
+      if (header && header.startsWith('Bearer ')) {
+        token = header.split(' ')[1]
+      } else if (req.cookies && req.cookies.token) {
+        token = req.cookies.token
       }
 
-      const token = header.split(' ')[1]
       if (!token) {
-        return res.status(401).json({ message: 'Unauthorized', error: 'Authentication token missing' })
+        return res.status(401).json({ message: 'Unauthorized', error: 'Authentication token required' })
       }
 
       let decodedUser = null

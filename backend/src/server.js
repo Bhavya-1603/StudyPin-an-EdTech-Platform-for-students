@@ -13,7 +13,7 @@ import { connectDatabase } from './db/client.js'
 import { createEmbedding, isOpenAIConfigured } from './utils/openaiClient.js'
 import { recommendNotesForUser } from './utils/recommendation.js'
 
-import createNotesRoutes from './routes/notesRoutes.js'
+import createNotesRoutes, { inferCategory } from './routes/notesRoutes.js'
 import createUserRoutes from './routes/userRoutes.js'
 import createAuthRoutes from './routes/authRoutes.js'
 
@@ -102,8 +102,14 @@ class InMemoryCollection {
     let result = [...this.items]
 
     if (filter && typeof filter === 'object') {
-      if (filter.subject) {
-        result = result.filter((item) => item.subject === filter.subject)
+      if (filter.category && filter.category !== 'All') {
+        result = result.filter((item) => {
+          const cat = item.category || inferCategory(item.subject, item.title, item.tags)
+          return cat.toLowerCase() === filter.category.toLowerCase()
+        })
+      }
+      if (filter.subject && filter.subject !== 'All') {
+        result = result.filter((item) => item.subject.toLowerCase() === filter.subject.toLowerCase())
       }
       if (filter.continueLearning) {
         result = result.filter((item) => item.continueLearning)
@@ -231,7 +237,190 @@ class InMemoryCollection {
 
 /* ---------------- GLOBAL STATE ---------------- */
 
-let currentNotes = new InMemoryCollection([])
+const seedNotes = [
+  {
+    id: 'note-math-1',
+    title: 'JEE Calculus & Limits Master Formula Sheet',
+    description: 'Comprehensive formulas covering limits, derivatives, definite integrals, and application problems.',
+    category: 'Math',
+    subject: 'Mathematics',
+    tags: ['Calculus', 'JEE', 'Formula Sheet', 'Limits'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1517430816045-df4b7de1cab6?auto=format&fit=crop&w=1000&q=80',
+    likes: 116,
+    saves: 92,
+    views: 1840,
+    uploaded_at: '2026-05-28T12:00:00.000Z',
+    uploader: 'Rahul',
+    difficulty: 'Medium',
+    trendingScore: 86,
+    recommended: true,
+    continueLearning: true,
+    basedOnYourNotes: true,
+  },
+  {
+    id: 'note-math-2',
+    title: 'Linear Algebra & Matrices Quick Revision',
+    description: 'Structured notes on eigenvalues, vector spaces, matrix transforms, and rank-nullity theorem.',
+    category: 'Math',
+    subject: 'Mathematics',
+    tags: ['Linear Algebra', 'Matrices', 'Vectors', 'MIT OCW'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&w=1000&q=80',
+    likes: 84,
+    saves: 60,
+    views: 1280,
+    uploaded_at: '2026-05-24T16:00:00.000Z',
+    uploader: 'Sakshi',
+    difficulty: 'Hard',
+    trendingScore: 66,
+    recommended: false,
+    continueLearning: true,
+    basedOnYourNotes: false,
+  },
+  {
+    id: 'note-sci-1',
+    title: 'Organic Chemistry Reaction Maps & Mechanisms',
+    description: 'High-yield reaction pathways, nucleophilic additions, and functional group conversions with flashcards.',
+    category: 'Science',
+    subject: 'Chemistry',
+    tags: ['Organic', 'NEET', 'Reactions', 'Flashcards'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1000&q=80',
+    likes: 98,
+    saves: 76,
+    views: 1510,
+    uploaded_at: '2026-05-30T08:00:00.000Z',
+    uploader: 'Ananya',
+    difficulty: 'Hard',
+    trendingScore: 74,
+    recommended: true,
+    continueLearning: false,
+    basedOnYourNotes: true,
+  },
+  {
+    id: 'note-sci-2',
+    title: 'Wave Optics & Interference Comprehensive Guide',
+    description: 'Young double slit experiment, wave-front interference, and polarization principles.',
+    category: 'Science',
+    subject: 'Physics',
+    tags: ['Wave Optics', 'Physics', 'Interference', 'Formulas'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&w=1000&q=80',
+    likes: 89,
+    saves: 70,
+    views: 1390,
+    uploaded_at: '2026-05-27T10:00:00.000Z',
+    uploader: 'Aarav',
+    difficulty: 'Medium',
+    trendingScore: 78,
+    recommended: true,
+    continueLearning: true,
+    basedOnYourNotes: true,
+  },
+  {
+    id: 'note-sci-3',
+    title: 'Biology Mind Map for NEET & Physiology',
+    description: 'Visual mind map connecting human physiology, Mendelian genetics, and molecular inheritance.',
+    category: 'Science',
+    subject: 'Biology',
+    tags: ['Mind Map', 'NEET', 'Physiology', 'Genetics'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1000&q=80',
+    likes: 76,
+    saves: 64,
+    views: 1170,
+    uploaded_at: '2026-05-31T14:45:00.000Z',
+    uploader: 'Neha',
+    difficulty: 'Medium',
+    trendingScore: 68,
+    recommended: true,
+    continueLearning: true,
+    basedOnYourNotes: false,
+  },
+  {
+    id: 'note-hist-1',
+    title: 'World History & The Industrial Revolution Summary',
+    description: 'Key socioeconomic shifts, technological innovations, colonial expansion, and labor reforms.',
+    category: 'History',
+    subject: 'History',
+    tags: ['Industrial Revolution', 'World History', 'Revolutions', 'Europe'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1461360370896-922624d12aa1?auto=format&fit=crop&w=1000&q=80',
+    likes: 92,
+    saves: 58,
+    views: 1040,
+    uploaded_at: '2026-06-02T11:00:00.000Z',
+    uploader: 'Dev',
+    difficulty: 'Medium',
+    trendingScore: 72,
+    recommended: true,
+    continueLearning: false,
+    basedOnYourNotes: false,
+  },
+  {
+    id: 'note-hist-2',
+    title: 'Ancient Civilizations & Democratic Evolution',
+    description: 'Comparative study of Mesopotamian law, Athenian direct democracy, and Roman republic structures.',
+    category: 'History',
+    subject: 'History',
+    tags: ['Ancient Greece', 'Rome', 'Civilization', 'Democracy'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1000&q=80',
+    likes: 81,
+    saves: 49,
+    views: 920,
+    uploaded_at: '2026-06-03T15:20:00.000Z',
+    uploader: 'Maya',
+    difficulty: 'Easy',
+    trendingScore: 65,
+    recommended: false,
+    continueLearning: false,
+    basedOnYourNotes: false,
+  },
+  {
+    id: 'note-cs-1',
+    title: 'Data Structures & Algorithms Exam Flashcards',
+    description: 'Comprehensive cheat sheets for balanced trees, graphs, heaps, dynamic programming, and binary search.',
+    category: 'Computer Science',
+    subject: 'Computer Science',
+    tags: ['DSA', 'Algorithms', 'Trees', 'Graphs'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1000&q=80',
+    likes: 128,
+    saves: 110,
+    views: 2010,
+    uploaded_at: '2026-05-29T11:20:00.000Z',
+    uploader: 'Arjun',
+    difficulty: 'Medium',
+    trendingScore: 90,
+    recommended: false,
+    continueLearning: false,
+    basedOnYourNotes: false,
+  },
+  {
+    id: 'note-cs-2',
+    title: 'AI & Neural Networks Architecture Guide',
+    description: 'Core concepts of backpropagation, transformer self-attention, and generative model architectures.',
+    category: 'Computer Science',
+    subject: 'Computer Science',
+    tags: ['AI & ML', 'Deep Learning', 'Transformers', 'Algorithms'],
+    file_url: '#',
+    thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1000&q=80',
+    likes: 142,
+    saves: 101,
+    views: 2135,
+    uploaded_at: '2026-06-01T09:30:00.000Z',
+    uploader: 'Priya',
+    difficulty: 'Hard',
+    trendingScore: 92,
+    recommended: true,
+    continueLearning: false,
+    basedOnYourNotes: true,
+  },
+]
+
+let currentNotes = new InMemoryCollection(seedNotes)
 let currentUsers = new InMemoryCollection([])
 
 const notesCollection = new Proxy({}, {
@@ -260,9 +449,16 @@ async function initializeDatabase() {
       const realUsers = db.collection('users')
 
       await realUsers.createIndex({ email: 1 }, { unique: true }).catch(() => {})
+      await realNotes.createIndex({ category: 1 }).catch(() => {})
       await realNotes.createIndex({ subject: 1 }).catch(() => {})
       await realNotes.createIndex({ tags: 1 }).catch(() => {})
       await realNotes.createIndex({ createdAt: -1 }).catch(() => {})
+
+      // If database collection is fresh, insert categorized seed resources
+      const count = await realNotes.countDocuments().catch(() => 0)
+      if (count === 0) {
+        await realNotes.insertMany(seedNotes.map((n) => ({ ...n, createdAt: new Date() }))).catch(() => {})
+      }
 
       currentNotes = realNotes
       currentUsers = realUsers

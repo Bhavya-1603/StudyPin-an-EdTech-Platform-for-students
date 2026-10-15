@@ -28,7 +28,9 @@ export default function createUserRoutes({ usersCollection, notesCollection, req
     }
 
     let user = await usersCollection.findOne({ email: req.user.email })
+    let isNewUser = false
     if (!user) {
+      isNewUser = true
       user = {
         name: req.user.name || req.user.email.split('@')[0],
         email: req.user.email,
@@ -38,8 +40,13 @@ export default function createUserRoutes({ usersCollection, notesCollection, req
         deadlines: [],
         goals: [],
         activities: [],
+        loginCount: 1,
+        isNewUser: true,
+        createdAt: new Date(),
       }
       await usersCollection.insertOne(user)
+    } else {
+      isNewUser = Boolean(user.isNewUser)
     }
 
     return res.json({
@@ -49,6 +56,7 @@ export default function createUserRoutes({ usersCollection, notesCollection, req
       streak: user.streak || 1,
       followedSubjects: user.followedSubjects || ['Physics', 'Mathematics', 'Computer Science'],
       savedTags: user.savedTags || [],
+      isNewUser,
     })
   })
 
@@ -98,6 +106,7 @@ export default function createUserRoutes({ usersCollection, notesCollection, req
           goalsCompleted: `${goalPercent}%`,
           goalsTrend: `${completedGoals} of ${goals.length} goals achieved`,
         },
+        isNewUser: Boolean(user?.isNewUser),
         activities,
         deadlines,
         goals,
