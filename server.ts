@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 import fs from 'fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const PORT = 3000
+const PORT = process.env.PORT && !process.env.APPLET_ID ? parseInt(process.env.PORT, 10) : 3000
 const isProduction = process.env.NODE_ENV === 'production'
 
 async function startServer() {
