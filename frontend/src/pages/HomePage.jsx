@@ -1,11 +1,21 @@
 import { useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, BookOpen, Sparkles, UploadCloud, Compass, CheckCircle2 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import NoteCard from '../components/NoteCard'
 import { useNotesStore } from '../store/useStore'
+import { ROUTES } from '../constants/routes'
 
-const categories = ['Physics', 'Chemistry', 'Mathematics', 'Computer Science', 'Biology', 'Engineering']
+const categories = [
+  { name: 'Physics', count: '142 notes', color: 'from-blue-500/10 to-sky-500/10 text-blue-700' },
+  { name: 'Chemistry', count: '118 notes', color: 'from-amber-500/10 to-orange-500/10 text-amber-800' },
+  { name: 'Mathematics', count: '196 notes', color: 'from-indigo-500/10 to-purple-500/10 text-indigo-700' },
+  { name: 'Computer Science', count: '230 notes', color: 'from-emerald-500/10 to-teal-500/10 text-emerald-800' },
+  { name: 'Biology', count: '94 notes', color: 'from-rose-500/10 to-pink-500/10 text-rose-700' },
+  { name: 'Engineering', count: '160 notes', color: 'from-cyan-500/10 to-blue-500/10 text-cyan-800' },
+]
 
 function HomePage() {
   const notes = useNotesStore((state) => state.notes)
@@ -19,104 +29,112 @@ function HomePage() {
   }, [loadNotes, notes.length])
 
   return (
-    <div className="space-y-10">
-      <section className="rounded-[2rem] border border-white/10 bg-slate-900/80 p-8 shadow-glow backdrop-blur-xl sm:p-10">
-        <div className="grid gap-10 lg:grid-cols-[1.3fr_0.95fr] lg:items-center">
-          <div className="space-y-6">
-            <Badge label="AI-powered EdTech" />
-            <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-              Upload notes, discover smarter learning, and build your study library faster.
+    <div className="space-y-12 pb-12">
+      {/* Hero Section */}
+      <section className="rounded-3xl border border-slate-200/90 bg-gradient-to-b from-white via-slate-50/50 to-blue-50/20 p-8 sm:p-12 shadow-sm">
+        <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
+          <div className="space-y-6 lg:col-span-7">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/80 px-3 py-1 text-xs font-semibold text-blue-700">
+              <Sparkles size={13} className="text-blue-600" />
+              <span>Smart Student Knowledge Platform</span>
+            </div>
+
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl leading-[1.15]">
+              Upload notes, discover smarter study guides, and accelerate your learning.
             </h1>
-            <p className="max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
-              StudyPin combines powerful AI recommendations with a premium discovery experience designed for modern learners who want structure, speed, and confidence.
+
+            <p className="max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
+              StudyPin unifies personalized note discovery, automated flashcards, and student study workflows into a luminous, distraction-free workspace.
             </p>
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <Button to="/upload">Upload Study Material</Button>
-              <Button variant="secondary" to="/explore">Explore Resources</Button>
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button to={ROUTES.DASHBOARD} variant="primary" size="lg" className="gap-2">
+                <span>Open Student Dashboard</span>
+                <ArrowRight size={16} />
+              </Button>
+              <Button to={ROUTES.EXPLORE} variant="secondary" size="lg">
+                Explore Notes
+              </Button>
+              <Button to={ROUTES.UPLOAD} variant="ghost" size="lg" className="gap-1.5">
+                <UploadCloud size={16} />
+                <span>Upload Material</span>
+              </Button>
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Card title="Active students" value="12.4K+" />
-            <Card title="Resources uploaded" value="8.9K+" />
-            <Card title="AI recommendations" value="4.6K+" />
-            <Card title="Trusted study partner" value="94% satisfaction" />
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:col-span-5">
+            <Card title="Active Learners" value="12,400+" description="Students sharing verified exam notes" />
+            <Card title="Study Resources" value="8,900+" description="Structured notes, cheat sheets & guides" />
+            <Card title="AI Summaries" value="4,600+" description="Instant key concepts extracted" />
+            <Card title="Study Streak Avg" value="14 Days" description="High daily consistency benchmark" />
           </div>
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[0.55fr_0.45fr]">
-        <div className="rounded-[2rem] border border-white/10 bg-slate-900/80 p-8 shadow-glow backdrop-blur-xl">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm uppercase tracking-[0.28em] text-sky-300">Popular subjects</p>
-              <h2 className="mt-4 text-3xl font-semibold text-white">Choose your next learning path</h2>
-            </div>
-            <span className="inline-flex rounded-full bg-slate-800/80 px-4 py-2 text-xs uppercase tracking-[0.3em] text-slate-400">
-              Explore subjects
-            </span>
+      {/* Popular Subjects */}
+      <section className="rounded-2xl border border-slate-200/90 bg-white p-8 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Curated Library</p>
+            <h2 className="mt-1 text-2xl font-bold text-slate-900">Explore by Subject</h2>
           </div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            {categories.map((category) => (
-              <button key={category} className="rounded-3xl border border-slate-700 bg-slate-950/80 px-5 py-4 text-left transition hover:border-sky-400/60 hover:bg-slate-900/90">
-                <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Subject</p>
-                <h3 className="mt-2 text-lg font-semibold text-white">{category}</h3>
-              </button>
-            ))}
-          </div>
+          <Link to={ROUTES.EXPLORE} className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+            View All Subjects →
+          </Link>
         </div>
 
-        <div className="rounded-[2rem] border border-white/10 bg-slate-900/80 p-8 shadow-glow backdrop-blur-xl">
-          <p className="text-sm uppercase tracking-[0.26em] text-sky-300">AI recommendations preview</p>
-          <h2 className="mt-4 text-3xl font-semibold text-white">Recommended based on your learning style</h2>
-          <p className="mt-4 text-slate-300">StudyPin’s AI surfaces the most relevant resources, personalized to your interests and uploads.</p>
-          <div className="mt-8 space-y-4">
-            <div className="rounded-3xl bg-slate-950/80 p-5 shadow-inner shadow-slate-950/10">
-              <p className="text-sm text-sky-300">Because you uploaded Physics notes</p>
-              <h3 className="mt-3 text-xl font-semibold text-white">Modern Physics & Wave Optics</h3>
-              <p className="mt-2 text-slate-400">High-impact notes matched with your learning history and study goals.</p>
-            </div>
-            <div className="rounded-3xl bg-slate-950/80 p-5 shadow-inner shadow-slate-950/10">
-              <p className="text-sm text-sky-300">AI confidence</p>
-              <div className="mt-3 flex items-center gap-3">
-                <div className="h-3 flex-1 overflow-hidden rounded-full bg-slate-800">
-                  <div className="h-full w-3/4 rounded-full bg-sky-500" />
-                </div>
-                <span className="text-sm font-semibold text-white">82%</span>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {categories.map((cat) => (
+            <Link
+              key={cat.name}
+              to={`${ROUTES.EXPLORE}?subject=${encodeURIComponent(cat.name)}`}
+              className="group flex items-center justify-between rounded-xl border border-slate-200/80 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm"
+            >
+              <div>
+                <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
+                  {cat.name}
+                </h3>
+                <p className="text-xs text-slate-500">{cat.count}</p>
+              </div>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition">
+                <ArrowRight size={14} />
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Featured Resources */}
+      <section className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Featured Study Materials</p>
+            <h2 className="mt-1 text-2xl font-bold text-slate-900">Recommended for Your Exams</h2>
+          </div>
+          <Link to={ROUTES.EXPLORE} className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+            See all resources →
+          </Link>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {featured.length > 0 ? (
+            featured.map((note) => <NoteCard key={note.id} note={note} />)
+          ) : (
+            <div className="col-span-full rounded-2xl border border-slate-200/90 bg-white p-10 text-center space-y-3">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                <UploadCloud size={24} />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">Your study library is ready for notes</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Upload your lecture notes, summaries, or formula sheets to start building your personalized study library.
+              </p>
+              <div className="pt-2">
+                <Button to={ROUTES.UPLOAD} variant="primary" size="md">
+                  Upload First Note
+                </Button>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-3">
-        {featured.length ? (
-          featured.map((note) => <NoteCard key={note.id} note={note} />)
-        ) : (
-          <div className="rounded-[2rem] border border-white/10 bg-slate-900/80 p-10 text-center text-slate-300">
-            <p className="text-lg font-semibold text-white">No resources available yet</p>
-            <p className="mt-3 text-sm leading-6">Upload notes or explore the library, and your personalized recommendations will appear here.</p>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-[2rem] border border-white/10 bg-slate-900/80 p-8 shadow-glow backdrop-blur-xl">
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="space-y-4">
-            <p className="text-sm uppercase tracking-[0.26em] text-sky-300">How StudyPin works</p>
-            <h2 className="text-3xl font-semibold text-white">A smarter workflow for note-driven learning</h2>
-          </div>
-          <div className="space-y-4 rounded-3xl border border-slate-800/70 bg-slate-950/90 p-6">
-            <h3 className="text-xl font-semibold text-white">1. Upload</h3>
-            <p className="text-slate-400">Add notes, PDFs, mind maps and study guides in seconds.</p>
-          </div>
-          <div className="space-y-4 rounded-3xl border border-slate-800/70 bg-slate-950/90 p-6">
-            <h3 className="text-xl font-semibold text-white">2. Analyze</h3>
-            <p className="text-slate-400">AI extracts key topics, tags and recommendation signals.</p>
-          </div>
-          <div className="space-y-4 rounded-3xl border border-slate-800/70 bg-slate-950/90 p-6">
-            <h3 className="text-xl font-semibold text-white">3. Discover</h3>
-            <p className="text-slate-400">Learn from curated resources tailored to your study goals.</p>
-          </div>
+          )}
         </div>
       </section>
     </div>

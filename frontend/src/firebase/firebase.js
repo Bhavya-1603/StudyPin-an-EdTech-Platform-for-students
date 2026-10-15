@@ -1,21 +1,19 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { initializeApp, getApps } from 'firebase/app'
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyCVT7o-9-C2zQZJP0mJJguANw8Yv2Q4FyM",
-  authDomain: "studypin-498608.firebaseapp.com",
-  projectId: "studypin-498608",
-  storageBucket: "studypin-498608.firebasestorage.app",
-  messagingSenderId: "235883357796",
-  appId: "1:235883357796:web:b82f1b15124a44fdf36171",
-  measurementId: "G-TEXMNRJJN5"
-};
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCVT7o-9-C2zQZJP0mJJguANw8Yv2Q4FyM',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'studypin-498608.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'studypin-498608',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'studypin-498608.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '235883357796',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:235883357796:web:b82f1b15124a44fdf36171',
+}
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+let app = null
+try {
+  app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
+} catch (e) {
+  console.warn('Firebase init:', e.message)
+}
+
+export default app

@@ -1,9 +1,13 @@
-export function Card({ title, value, description, children, className = '' }) {
+export function Card({ title, value, description, icon, trend, children, className = '' }) {
   return (
-    <div className={`rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-glow ${className}`}>
-      {title && <p className="text-sm uppercase tracking-[0.26em] text-sky-300">{title}</p>}
-      {value && <p className="mt-3 text-3xl font-semibold text-white">{value}</p>}
-      {description && <p className="mt-2 text-slate-400">{description}</p>}
+    <div className={`rounded-2xl border border-slate-200/85 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-slate-300 ${className}`}>
+      <div className="flex items-start justify-between gap-3">
+        {title && <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</p>}
+        {icon && <div className="text-slate-400">{icon}</div>}
+      </div>
+      {value && <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">{value}</p>}
+      {trend && <p className="mt-1 text-xs font-medium text-emerald-600">{trend}</p>}
+      {description && <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{description}</p>}
       {children}
     </div>
   )

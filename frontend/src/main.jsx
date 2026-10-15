@@ -7,11 +7,19 @@ import { Toaster } from 'react-hot-toast'
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <GoogleOAuthProvider clientId={googleClientId}>
-    <>
+function Root() {
+  const content = (
+    <React.StrictMode>
       <App />
       <Toaster position="top-right" />
-    </>
-  </GoogleOAuthProvider>
-)
+    </React.StrictMode>
+  )
+
+  if (googleClientId) {
+    return <GoogleOAuthProvider clientId={googleClientId}>{content}</GoogleOAuthProvider>
+  }
+
+  return content
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />)

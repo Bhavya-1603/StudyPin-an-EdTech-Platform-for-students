@@ -12,10 +12,10 @@ import { fileURLToPath } from 'url'
 import { connectDatabase } from './db/client.js'
 import { createEmbedding, isOpenAIConfigured } from './utils/openaiClient.js'
 import { recommendNotesForUser } from './utils/recommendation.js'
-import { notes as sampleNotes } from './data/sampleNotes.js'
 
 import createNotesRoutes from './routes/notesRoutes.js'
 import createUserRoutes from './routes/userRoutes.js'
+import createAuthRoutes from './routes/authRoutes.js'
 
 import { createRequireAuth } from './middleware/requireAuth.js'
 import { authRateLimiter } from './middleware/rateLimiter.js'
@@ -24,15 +24,20 @@ import { errorHandler } from './middleware/errorHandler.js'
 dotenv.config()
 
 const app = express()
-const port = process.env.PORT || 5000
+app.set('trust proxy', 1)
+const port = 3000
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /* ---------------- FILE UPLOAD SETUP ---------------- */
 
-const uploadsDir = join(__dirname, '../uploads')
+const uploadsDir = join(__dirname, '../../uploads')
 const rawDir = join(uploadsDir, 'raw')
 
-fs.mkdirSync(rawDir, { recursive: true })
+try {
+  fs.mkdirSync(rawDir, { recursive: true })
+} catch {
+  // directory might already exist
+}
 
 const allowedFileTypes = {
   'application/pdf': '.pdf',
@@ -66,65 +71,223 @@ const upload = multer({
   },
 })
 
-/* ---------------- GLOBAL STATE ---------------- */
+/* ---------------- IN-MEMORY FALLBACK COLLECTION ---------------- */
 
-let notesCollection = null
-let usersCollection = null
-const openAIEnabled = isOpenAIConfigured()
+class InMemoryCollection {
+  constructor(initialData = []) {
+    this.items = initialData.map((d) => ({
+      ...d,
+      _id: d._id || d.id || 'doc-' + Math.random().toString(36).slice(2, 8),
+      id: d.id || d._id || 'doc-' + Math.random().toString(36).slice(2, 8),
+    }))
+  }
 
-/* ---------------- DB INIT ---------------- */
+  async createIndex() {
+    return 'ok'
+  }
 
-async function initializeDatabase() {
-  try {
-    const db = await connectDatabase()
-    notesCollection = db.collection('notes')
-    usersCollection = db.collection('users')
+  async countDocuments() {
+    return this.items.length
+  }
 
-    await usersCollection.createIndex({ email: 1 }, { unique: true })
-    await notesCollection.createIndex({ subject: 1 })
-    await notesCollection.createIndex({ tags: 1 })
-    await notesCollection.createIndex({ createdAt: -1 })
+  async distinct(field) {
+    const values = new Set()
+    for (const item of this.items) {
+      if (item[field] !== undefined) values.add(item[field])
+    }
+    return Array.from(values)
+  }
 
-    const count = await notesCollection.countDocuments()
+  find(filter = {}) {
+    let result = [...this.items]
 
-    if (count === 0) {
-      for (const note of sampleNotes) {
-        const content = `${note.title} ${note.description} ${note.subject} ${(note.tags || []).join(' ')}`
-
-        const embedding = openAIEnabled
-          ? await createEmbedding(content)
-          : null
-
-        await notesCollection.insertOne({
-          ...note,
-          embedding,
-          createdAt: new Date(note.uploaded_at),
-          source: 'seed',
+    if (filter && typeof filter === 'object') {
+      if (filter.subject) {
+        result = result.filter((item) => item.subject === filter.subject)
+      }
+      if (filter.continueLearning) {
+        result = result.filter((item) => item.continueLearning)
+      }
+      if (filter.$or && Array.isArray(filter.$or)) {
+        result = result.filter((item) => {
+          return filter.$or.some((cond) => {
+            if (cond.id?.$in && cond.id.$in.includes(item.id)) return true
+            if (cond._id?.$in && cond._id.$in.includes(item._id)) return true
+            if (cond.uploaderId && item.uploaderId === cond.uploaderId) return true
+            if (cond.uploaderEmail && item.uploaderEmail === cond.uploaderEmail) return true
+            if (cond.subject?.$in) {
+              return cond.subject.$in.includes(item.subject)
+            }
+            if (cond.tags?.$in) {
+              return (item.tags || []).some((t) => cond.tags.$in.includes(t))
+            }
+            for (const key of ['title', 'description', 'subject', 'tags']) {
+              if (cond[key]?.$regex) {
+                const val = key === 'tags' ? (item.tags || []).join(' ') : (item[key] || '')
+                if (new RegExp(cond[key].$regex, cond[key].$options || 'i').test(val)) {
+                  return true
+                }
+              }
+            }
+            return false
+          })
         })
       }
     }
 
-    console.log('MongoDB connected and notes seeded')
-  } catch (error) {
-    console.warn('MongoDB not available; running in demo mode.', error.message)
+    const queryObj = {
+      _data: result,
+      sort() {
+        return queryObj
+      },
+      limit(n) {
+        queryObj._data = queryObj._data.slice(0, n)
+        return queryObj
+      },
+      async toArray() {
+        return queryObj._data
+      },
+    }
+    return queryObj
+  }
+
+  async findOne(query) {
+    if (!query) return this.items[0] || null
+    if (query.email) {
+      const email = query.email.toLowerCase()
+      return this.items.find((u) => (u.email || '').toLowerCase() === email) || null
+    }
+    if (query._id || query.id) {
+      const id = query._id || query.id
+      return this.items.find((u) => u._id === id || u.id === id) || null
+    }
+    return this.items[0] || null
+  }
+
+  async findOneAndUpdate(query, update) {
+    let item = await this.findOne(query)
+    if (!item) {
+      if (query && query.email) {
+        item = {
+          _id: 'user-' + Date.now(),
+          id: 'user-' + Date.now(),
+          email: query.email,
+          name: query.email.split('@')[0],
+          savedNoteIds: [],
+          deadlines: [],
+          goals: [],
+          activities: [],
+        }
+        this.items.push(item)
+      } else {
+        return { value: null }
+      }
+    }
+    if (update.$set) {
+      Object.assign(item, update.$set)
+    }
+    if (update.$inc) {
+      for (const [k, v] of Object.entries(update.$inc)) {
+        item[k] = (item[k] || 0) + v
+      }
+    }
+    if (update.$push) {
+      for (const [k, v] of Object.entries(update.$push)) {
+        item[k] = item[k] || []
+        if (v && v.$each) {
+          item[k].push(...v.$each)
+          if (v.$slice && v.$slice < 0) {
+            item[k] = item[k].slice(v.$slice)
+          }
+        } else {
+          item[k].push(v)
+        }
+      }
+    }
+    return { value: item }
+  }
+
+  async deleteOne(query) {
+    const idx = this.items.findIndex((it) => {
+      if (query.$or) {
+        return query.$or.some((c) => (c.id && it.id === c.id) || (c._id && it._id === c._id))
+      }
+      return (query.id && it.id === query.id) || (query._id && it._id === query._id)
+    })
+    if (idx !== -1) {
+      this.items.splice(idx, 1)
+      return { deletedCount: 1 }
+    }
+    return { deletedCount: 0 }
+  }
+
+  async insertOne(doc) {
+    const id = doc.id || doc._id || 'item-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
+    const item = { ...doc, _id: id, id }
+    this.items.unshift(item)
+    return { insertedId: id }
   }
 }
 
-/* IMPORTANT: await DB before routes */
-await initializeDatabase()
+/* ---------------- GLOBAL STATE ---------------- */
+
+let currentNotes = new InMemoryCollection([])
+let currentUsers = new InMemoryCollection([])
+
+const notesCollection = new Proxy({}, {
+  get(_, prop) {
+    const val = currentNotes[prop]
+    return typeof val === 'function' ? val.bind(currentNotes) : val
+  }
+})
+
+const usersCollection = new Proxy({}, {
+  get(_, prop) {
+    const val = currentUsers[prop]
+    return typeof val === 'function' ? val.bind(currentUsers) : val
+  }
+})
+
+const openAIEnabled = isOpenAIConfigured()
+
+/* ---------------- DB INIT (NON-BLOCKING) ---------------- */
+
+async function initializeDatabase() {
+  try {
+    const db = await connectDatabase()
+    if (db) {
+      const realNotes = db.collection('notes')
+      const realUsers = db.collection('users')
+
+      await realUsers.createIndex({ email: 1 }, { unique: true }).catch(() => {})
+      await realNotes.createIndex({ subject: 1 }).catch(() => {})
+      await realNotes.createIndex({ tags: 1 }).catch(() => {})
+      await realNotes.createIndex({ createdAt: -1 }).catch(() => {})
+
+      currentNotes = realNotes
+      currentUsers = realUsers
+      console.log('MongoDB Atlas connected and active (clean production database)')
+      return
+    }
+  } catch (error) {
+    console.warn('MongoDB connection note: running with in-memory collection.', error.message)
+  }
+}
+
+// Start database connection in background without blocking server listen
+initializeDatabase().catch((err) => console.warn('Background DB init:', err.message))
 
 /* ---------------- ROUTES INIT ---------------- */
 
 const requireAuth = createRequireAuth(usersCollection)
-
 const authRouter = createAuthRoutes({ usersCollection })
 const notesRouter = createNotesRoutes({
   notesCollection,
+  usersCollection,
   requireAuth,
   upload,
   openAIEnabled,
   createEmbedding,
-  sampleNotes,
 })
 const userRouter = createUserRoutes({
   usersCollection,
@@ -135,41 +298,16 @@ const userRouter = createUserRoutes({
 
 /* ---------------- MIDDLEWARE ---------------- */
 
-const allowedOrigin =
-  process.env.CORS_ORIGIN || 'http://localhost:5173'
-
-app.use(helmet())
-
 app.use(
-  helmet.contentSecurityPolicy({
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: [
-        "'self'",
-        'https://accounts.google.com',
-        'https://apis.google.com',
-        'https://cdnjs.cloudflare.com',
-      ],
-      styleSrc: ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
-      connectSrc: [
-        "'self'",
-        allowedOrigin,
-        'https://oauth2.googleapis.com',
-        'https://accounts.google.com',
-      ],
-      imgSrc: ["'self'", 'data:', 'https://images.unsplash.com'],
-      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-      frameSrc: ["'self'", 'https://accounts.google.com'],
-    },
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
   })
 )
 
 app.use(
   cors({
-    origin: [
-      'http://localhost:5173',
-      'https://study-pin-frontend.vercel.app',
-    ],
+    origin: true,
     credentials: true,
   })
 )
@@ -178,22 +316,15 @@ app.use(cookieParser())
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
 
-/* ---------------- HEALTH ROUTE ---------------- */
-
-app.get('/', (req, res) => {
-  res.json({
-    status: 'StudyPin API running',
-    message: 'Server is healthy 🚀',
-  })
-})
-
-app.get('/health', (req, res) => {
-  res.json({ ok: true })
-})
-
 /* ---------------- STATIC ---------------- */
 
 app.use('/uploads', express.static(uploadsDir, { index: false }))
+
+/* ---------------- HEALTH ROUTE ---------------- */
+
+app.get('/health', (req, res) => {
+  res.json({ ok: true, status: 'healthy', timestamp: new Date().toISOString() })
+})
 
 /* ---------------- API ROUTES ---------------- */
 
@@ -201,15 +332,8 @@ app.use('/api/auth', authRateLimiter, authRouter)
 app.use('/api/notes', notesRouter)
 app.use('/api/users', userRouter)
 
-/* ❌ FIXED: removed broken line */
-/* app.use('/api/auth', authRoutes) ← THIS WAS CRASHING SERVER */
-
 /* ---------------- ERROR HANDLER ---------------- */
 
 app.use(errorHandler)
 
-/* ---------------- START SERVER ---------------- */
-
-app.listen(port, () => {
-  console.log(`StudyPin backend running on http://localhost:${port}`)
-})
+export { app, port, uploadsDir }

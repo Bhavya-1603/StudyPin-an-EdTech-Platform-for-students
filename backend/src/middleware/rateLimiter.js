@@ -5,6 +5,7 @@ export const authRateLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: 'Too many authentication attempts. Please try again later.' },
 })
 
@@ -13,5 +14,6 @@ export const uploadRateLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: 'Too many upload requests. Please try again later.' },
 })

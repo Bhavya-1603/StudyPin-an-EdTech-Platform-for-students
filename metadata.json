@@ -1,0 +1,5 @@
+{
+  "name": "StudyPin",
+  "description": "StudyPin AI-powered student knowledge platform.",
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

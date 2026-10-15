@@ -1,13 +1,23 @@
 import { Link } from 'react-router-dom'
 
-export function Button({ children, to, variant = 'primary', className = '', ...props }) {
-  const base = 'inline-flex items-center justify-center rounded-3xl px-6 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-sky-400/50'
-  const variants = {
-    primary: 'bg-sky-500 text-white hover:bg-sky-400',
-    secondary: 'border border-slate-700 bg-slate-950/90 text-slate-100 hover:border-sky-400 hover:bg-slate-900',
-    ghost: 'bg-transparent text-white hover:bg-white/5',
+export function Button({ children, to, variant = 'primary', size = 'md', className = '', ...props }) {
+  const base = 'inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 whitespace-nowrap shrink-0'
+  
+  const sizes = {
+    sm: 'rounded-lg px-3 py-1.5 text-xs',
+    md: 'rounded-xl px-4 py-2 text-sm',
+    lg: 'rounded-xl px-5 py-2.5 text-sm',
   }
-  const classes = `${base} ${variants[variant] || variants.primary} ${className}`
+
+  const variants = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm',
+    secondary: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm',
+    ghost: 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100',
+    outline: 'border border-blue-600 text-blue-600 hover:bg-blue-50',
+    destructive: 'bg-rose-600 text-white hover:bg-rose-700 shadow-sm',
+  }
+
+  const classes = `${base} ${sizes[size] || sizes.md} ${variants[variant] || variants.primary} ${className}`
 
   if (to) {
     return (
