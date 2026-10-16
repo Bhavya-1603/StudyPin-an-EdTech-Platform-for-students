@@ -1,31 +1,13 @@
-import { initializeApp, getApps } from 'firebase/app'
 import {
-  getAuth,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from 'firebase/auth'
+import { auth } from '../firebase/firebase'
 import { apiUrl } from '../utils/api'
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAt1yKWquGHq6ruEHA-JLo3LHERWvXemyY',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'studypin-6dc6e.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'studypin-6dc6e',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:325583437548:web:c5d154489c9beaa7722fc9',
-}
-
-let app = null
-let authInstance = null
-
-try {
-  app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
-  authInstance = getAuth(app)
-} catch (err) {
-  console.warn('Firebase client auth initialization skipped:', err.message)
-}
-
-export const auth = authInstance
+export { auth }
 const provider = new GoogleAuthProvider()
 
 // 1. Google sign-in with token generation
