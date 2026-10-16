@@ -304,12 +304,11 @@ export default function createAuthRoutes({ usersCollection }) {
     }
   })
 
-  // 7. POST /api/auth/google: Google OAuth login
   router.post('/google', async (req, res) => {
     try {
-      const { credential } = req.body
-      let email = 'student@studypin.edu'
-      let name = 'StudyPin Student'
+      const { credential, email: bodyEmail, name: bodyName, photoURL } = req.body
+      let email = bodyEmail || 'student@studypin.edu'
+      let name = bodyName || (bodyEmail ? bodyEmail.split('@')[0] : 'StudyPin Student')
 
       if (credential) {
         try {
@@ -324,7 +323,7 @@ export default function createAuthRoutes({ usersCollection }) {
         }
       }
 
-      const cleanEmail = email.toLowerCase()
+      const cleanEmail = email.toLowerCase().trim()
       let user = null
       let isFirstTime = false
 

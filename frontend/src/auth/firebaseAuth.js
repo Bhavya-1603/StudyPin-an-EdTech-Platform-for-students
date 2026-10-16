@@ -9,26 +9,65 @@ import { apiUrl } from '../utils/api'
 
 export { auth }
 const provider = new GoogleAuthProvider()
+provider.setCustomParameters({ prompt: 'select_account' })
 
-// 1. Google sign-in with token generation
+// 1. Google sign-in with Firebase Auth and JWT Backend Session
 export const loginWithGoogle = async () => {
-  if (authInstance) {
+  if (auth) {
     try {
-      const result = await signInWithPopup(authInstance, provider)
+      const result = await signInWithPopup(auth, provider)
       const token = await result.user.getIdToken()
+      const email = result.user.email
+      const name = result.user.displayName || email?.split('@')[0] || 'Student'
+      const photoURL = result.user.photoURL
+
+      // Create or synchronize backend session with real Google account data
+      const res = await fetch(apiUrl('/api/auth/google'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credential: token,
+          email,
+          name,
+          photoURL,
+          uid: result.user.uid,
+        }),
+      })
+
+      const data = await res.json()
+      if (res.ok && data.token) {
+        return {
+          user: {
+            ...data.user,
+            displayName: data.user.name || name,
+            photoURL,
+          },
+          token: data.token,
+        }
+      }
+
       return {
         user: {
           uid: result.user.uid,
           id: result.user.uid,
-          email: result.user.email,
-          displayName: result.user.displayName,
-          name: result.user.displayName,
+          email,
+          displayName: name,
+          name,
+          photoURL,
+          isNewUser: false,
+          isReturningUser: true,
           getIdToken: async () => token,
         },
         token,
       }
-    } catch {
-      // Fallback to backend API
+    } catch (popupErr) {
+      if (
+        popupErr.code === 'auth/popup-closed-by-user' ||
+        popupErr.code === 'auth/cancelled-popup-request'
+      ) {
+        throw new Error('Google Sign-in was cancelled.')
+      }
+      console.warn('Firebase popup sign-in, trying API fallback:', popupErr.message)
     }
   }
 
@@ -40,15 +79,7 @@ export const loginWithGoogle = async () => {
   })
   const data = await res.json()
   return {
-    user: {
-      uid: data.user.id,
-      id: data.user.id,
-      email: data.user.email,
-      displayName: data.user.name,
-      name: data.user.name,
-      isNewUser: data.user.isNewUser,
-      getIdToken: async () => data.token,
-    },
+    user: data.user,
     token: data.token,
   }
 }
@@ -91,8 +122,8 @@ export const loginUser = async (email, password) => {
   }
 
   // Fallback to Firebase client if available
-  if (authInstance) {
-    const cred = await signInWithEmailAndPassword(authInstance, email, password)
+  if (auth) {
+    const cred = await signInWithEmailAndPassword(auth, email, password)
     const token = await cred.user.getIdToken()
     return {
       user: {
@@ -124,9 +155,9 @@ export const registerUser = async (name, email, password) => {
   }
 
   // Also register with Firebase client if configured
-  if (authInstance) {
+  if (auth) {
     try {
-      await createUserWithEmailAndPassword(authInstance, email, password)
+      await createUserWithEmailAndPassword(auth, email, password)
     } catch {
       // Firebase registration is optional if backend registration succeeded
     }

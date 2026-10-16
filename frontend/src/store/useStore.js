@@ -180,6 +180,21 @@ export const useStore = create((set, get) => ({
     }
   },
 
+  // 3b. Load user's own uploaded notes
+  loadMyUploads: async () => {
+    try {
+      const response = await fetchWithAuth('/api/notes/my-uploads')
+      const data = await response.json()
+      if (response.ok && Array.isArray(data)) {
+        set({ myUploads: data })
+        return data
+      }
+      return []
+    } catch {
+      return []
+    }
+  },
+
   // 4. Save or bookmark note
   saveNote: async (note, shouldSave = true) => {
     try {
