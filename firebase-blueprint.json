@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Student profile, study stats, and workspace preferences",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique user ID matching auth UID" },
+        "name": { "type": "string", "description": "Student display name", "maxLength": 100 },
+        "email": { "type": "string", "description": "Student email address" },
+        "streak": { "type": "number", "description": "Consecutive days of study activity" },
+        "savedNoteIds": { "type": "array", "description": "List of pinned study note IDs" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp" }
+      },
+      "required": ["id", "email"]
+    },
+    "Note": {
+      "title": "Note",
+      "description": "Study material pin with categorized metadata and download link",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique note pin ID" },
+        "title": { "type": "string", "description": "Resource title", "maxLength": 150 },
+        "description": { "type": "string", "description": "Resource overview description", "maxLength": 2000 },
+        "category": { "type": "string", "description": "Primary academic category (Science, History, Math, CS, etc.)" },
+        "subject": { "type": "string", "description": "Academic subject or specific course topic" },
+        "tags": { "type": "array", "description": "Tags for search and study indexing" },
+        "file_url": { "type": "string", "description": "URL to download study attachment" },
+        "fileName": { "type": "string", "description": "Original file name" },
+        "uploader": { "type": "string", "description": "Student or creator name" },
+        "uploaderId": { "type": "string", "description": "User ID of creator" },
+        "uploaderEmail": { "type": "string", "description": "Email of creator" },
+        "likes": { "type": "number", "description": "Like count" },
+        "saves": { "type": "number", "description": "Pin/bookmark count" },
+        "views": { "type": "number", "description": "View count" },
+        "difficulty": { "type": "string", "description": "Difficulty level (Easy, Medium, Hard)" },
+        "createdAt": { "type": "string", "description": "Upload timestamp" }
+      },
+      "required": ["id", "title", "description", "category", "subject", "uploaderId"]
+    },
+    "Board": {
+      "title": "Board",
+      "description": "Student collection board for grouping study material pins by course or goal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique board ID" },
+        "title": { "type": "string", "description": "Board title (e.g. GATE Math Prep)", "maxLength": 100 },
+        "description": { "type": "string", "description": "Board description", "maxLength": 500 },
+        "category": { "type": "string", "description": "Category for the board" },
+        "ownerId": { "type": "string", "description": "User ID of the board creator" },
+        "noteIds": { "type": "array", "description": "Pinned note IDs belonging to this board" },
+        "createdAt": { "type": "string", "description": "Board creation timestamp" }
+      },
+      "required": ["id", "title", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Student user profiles and private workspace settings"
+    },
+    "/notes/{noteId}": {
+      "schema": "Note",
+      "description": "Public study resource pins uploaded by students"
+    },
+    "/boards/{boardId}": {
+      "schema": "Board",
+      "description": "Student curated study boards grouping pinned resources"
+    }
+  }
+}

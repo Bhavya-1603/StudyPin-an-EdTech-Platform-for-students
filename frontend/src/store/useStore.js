@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { apiUrl, fetchWithAuth } from '../utils/api'
+import { saveNoteToFirestore, syncUserToFirestore } from '../firebase/firestoreService'
 
 const defaultAuthState = {
   user: null,
@@ -219,12 +220,14 @@ export const useStore = create((set, get) => ({
   },
 
   // 6. Add newly uploaded note
-  addNote: (note) =>
+  addNote: (note) => {
+    saveNoteToFirestore(note).catch(() => {})
     set((state) => ({
       notes: [note, ...state.notes],
       myUploads: [note, ...state.myUploads],
       resources: { ...state.resources, notes: [note, ...state.resources.notes] },
-    })),
+    }))
+  },
 
   // 7. Load real student dashboard with JWT verification
   loadDashboardData: async () => {
