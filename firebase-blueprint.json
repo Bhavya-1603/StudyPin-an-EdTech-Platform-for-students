@@ -35,6 +35,8 @@
         "saves": { "type": "number", "description": "Pin/bookmark count" },
         "views": { "type": "number", "description": "View count" },
         "difficulty": { "type": "string", "description": "Difficulty level (Easy, Medium, Hard)" },
+        "thumbnail": { "type": "string", "description": "Cover preview image URL" },
+        "isSeed": { "type": "boolean", "description": "True if built-in system seed study note" },
         "createdAt": { "type": "string", "description": "Upload timestamp" }
       },
       "required": ["id", "title", "description", "category", "subject", "uploaderId"]

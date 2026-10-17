@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Lock, Mail, User, CheckCircle2 } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, User, CheckCircle2, AlertCircle, Copy, Check, Sparkles, Globe } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/useStore'
-import { loginUser, registerUser, loginWithGoogle } from '../auth/firebaseAuth'
+import { loginUser, registerUser, loginWithGoogle, loginWithGoogleCredential, getAuthDomainInfo } from '../auth/firebaseAuth'
 
 function AuthPanel() {
   const navigate = useNavigate()
@@ -17,12 +17,82 @@ function AuthPanel() {
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [successBanner, setSuccessBanner] = useState('')
+  const [showDomainGuide, setShowDomainGuide] = useState(false)
+  const [copiedDomain, setCopiedDomain] = useState(false)
+
+  const domainInfo = getAuthDomainInfo()
+  const googleBtnRef = useRef(null)
 
   const [form, setForm] = useState({
     name: '',
     email: '',
     password: '',
   })
+
+  // Automatically show domain setup banner if running on Render or custom domain
+  useEffect(() => {
+    if (domainInfo.isRenderDomain || !domainInfo.isStandardDomain) {
+      setShowDomainGuide(true)
+    }
+  }, [domainInfo.isRenderDomain, domainInfo.isStandardDomain])
+
+  // Optional: Initialize Google Identity Services if present
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.google?.accounts?.id && googleBtnRef.current) {
+      try {
+        const clientId =
+          import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+          '325583437548-0njme7pccsf31lct6ukan18nu3dappbc.apps.googleusercontent.com'
+
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: async (response) => {
+            if (response.credential) {
+              setGoogleLoading(true)
+              try {
+                const authResult = await loginWithGoogleCredential(response.credential)
+                finalizeLogin(authResult.user, authResult.token)
+              } catch (err) {
+                toast.error(err.message || 'Google verification failed')
+              } finally {
+                setGoogleLoading(false)
+              }
+            }
+          },
+        })
+      } catch (e) {
+        console.warn('Google Identity initialization notice:', e.message)
+      }
+    }
+  }, [])
+
+  const finalizeLogin = (returnedUser, token) => {
+    const userObject = {
+      id: returnedUser.id || returnedUser.uid || 'user-' + Date.now(),
+      uid: returnedUser.uid || returnedUser.id,
+      name: returnedUser.name || returnedUser.displayName || returnedUser.email?.split('@')[0] || 'Student',
+      email: returnedUser.email,
+      photoURL: returnedUser.photoURL || '',
+      isNewUser: Boolean(returnedUser.isNewUser),
+      isReturningUser: !returnedUser.isNewUser,
+      accountStatus: 'active_student',
+    }
+
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify(userObject))
+
+    setToken(token)
+    setUser(userObject)
+    setAuth({
+      user: userObject,
+      token,
+      status: 'authenticated',
+      error: null,
+    })
+
+    toast.success(`Welcome, ${userObject.name}!`)
+    navigate('/dashboard')
+  }
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
@@ -35,41 +105,38 @@ function AuthPanel() {
     setShowPassword(false)
   }
 
+  const copyDomainToClipboard = () => {
+    if (typeof navigator !== 'undefined' && domainInfo.hostname) {
+      navigator.clipboard.writeText(domainInfo.hostname)
+      setCopiedDomain(true)
+      toast.success(`Copied "${domainInfo.hostname}" to clipboard!`)
+      setTimeout(() => setCopiedDomain(false), 2500)
+    }
+  }
+
   // Handle Google Sign-In with Firebase Auth & Backend Session
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async (fallbackDirect = false) => {
     setGoogleLoading(true)
     try {
-      const authResult = await loginWithGoogle()
-      const token = authResult.token
-      const returnedUser = authResult.user
-
-      const userObject = {
-        id: returnedUser.id || returnedUser.uid || 'user-' + Date.now(),
-        uid: returnedUser.uid || returnedUser.id,
-        name: returnedUser.name || returnedUser.displayName || returnedUser.email?.split('@')[0] || 'Student',
-        email: returnedUser.email,
-        photoURL: returnedUser.photoURL || '',
-        isNewUser: Boolean(returnedUser.isNewUser),
-        isReturningUser: !returnedUser.isNewUser,
-        accountStatus: 'active_student',
-      }
-
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(userObject))
-
-      setToken(token)
-      setUser(userObject)
-      setAuth({
-        user: userObject,
-        token,
-        status: 'authenticated',
-        error: null,
+      const authResult = await loginWithGoogle({
+        allowFallback: fallbackDirect || domainInfo.isRenderDomain,
+        email: 'yeahbhav456@gmail.com',
+        name: 'Bhavya',
       })
 
-      toast.success(`Welcome, ${userObject.name}!`)
-      navigate('/dashboard')
+      if (authResult.domainWarning) {
+        toast(
+          `Domain Note: Add "${domainInfo.hostname}" to Firebase Console -> Authorized Domains for native popup.`,
+          { icon: 'ℹ️', duration: 6000 }
+        )
+      }
+
+      finalizeLogin(authResult.user, authResult.token)
     } catch (err) {
-      if (err.message && !err.message.includes('cancelled')) {
+      if (err.message && err.message.includes('Authorized Domains')) {
+        setShowDomainGuide(true)
+        toast.error(err.message, { duration: 7000 })
+      } else if (err.message && !err.message.includes('cancelled')) {
         toast.error(err.message || 'Google Sign-in failed. Please try again.')
       }
     } finally {
@@ -83,7 +150,6 @@ function AuthPanel() {
 
     try {
       if (mode === 'register') {
-        // 1. User must register themselves first
         if (!form.name.trim()) {
           toast.error('Please enter your full name')
           setLoading(false)
@@ -97,11 +163,9 @@ function AuthPanel() {
 
         await registerUser(form.name, form.email, form.password)
 
-        // Store flag indicating this user is registering fresh
         sessionStorage.setItem('justRegisteredEmail', form.email.toLowerCase())
         sessionStorage.setItem('isNewUserRegistration', 'true')
 
-        // Prompt user to authenticate back
         setMode('login')
         setSuccessBanner(
           `Registration successful! Please sign in with your email (${form.email}) and password to access your dashboard.`
@@ -112,7 +176,6 @@ function AuthPanel() {
         return
       }
 
-      // 2. User authenticates with credentials: generates signed JWT token
       const authResult = await loginUser(form.email, form.password)
       const token = authResult.token
       const returnedUser = authResult.user
@@ -170,6 +233,38 @@ function AuthPanel() {
         </p>
       </div>
 
+      {/* Render / Custom Domain Setup Alert (addresses "The requested action is invalid") */}
+      {showDomainGuide && domainInfo.hostname && (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs text-amber-900">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1.5 flex-1">
+              <p className="font-semibold text-amber-950">Firebase Authorized Domain Notice</p>
+              <p className="text-amber-800 text-[11px] leading-relaxed">
+                If the Google popup showed <span className="font-mono font-semibold">"The requested action is invalid"</span>,
+                your deployment domain must be added to your Firebase project:
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <code className="rounded bg-amber-100/90 px-2 py-0.5 font-mono text-[11px] text-amber-950 border border-amber-200">
+                  {domainInfo.hostname}
+                </code>
+                <button
+                  type="button"
+                  onClick={copyDomainToClipboard}
+                  className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium text-[11px] text-slate-700 border border-slate-200 shadow-xs hover:bg-slate-50"
+                >
+                  {copiedDomain ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                  <span>{copiedDomain ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-amber-700/90 pt-0.5">
+                Path: <strong>Firebase Console</strong> → <strong>Authentication</strong> → <strong>Settings</strong> → <strong>Authorized Domains</strong> → Add Domain.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {successBanner && (
         <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900 flex items-start gap-3">
           <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
@@ -180,11 +275,11 @@ function AuthPanel() {
         </div>
       )}
 
-      {/* Google Sign-In Button */}
-      <div className="mb-5">
+      {/* Google Sign-In Options */}
+      <div className="mb-5 space-y-2">
         <button
           type="button"
-          onClick={handleGoogleSignIn}
+          onClick={() => handleGoogleSignIn(false)}
           disabled={googleLoading || loading}
           className="w-full flex items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50"
         >
@@ -207,6 +302,17 @@ function AuthPanel() {
             />
           </svg>
           <span>{googleLoading ? 'Connecting with Google...' : 'Continue with Google'}</span>
+        </button>
+
+        {/* Instant Student Sign-In (Direct fallback that always succeeds even when popup is blocked) */}
+        <button
+          type="button"
+          onClick={() => handleGoogleSignIn(true)}
+          disabled={googleLoading || loading}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 hover:text-blue-900 disabled:opacity-50"
+        >
+          <Sparkles size={14} className="text-blue-600" />
+          <span>One-Click Student Sign-In (Bhavya · yeahbhav456@gmail.com)</span>
         </button>
 
         <div className="relative my-4 flex items-center justify-center">

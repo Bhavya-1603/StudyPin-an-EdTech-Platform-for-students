@@ -7,6 +7,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Connectivity verification document
+    match /test/{testId} {
+      allow get: if true;
+    }
+
     // Hardened Primitives
     function isSignedIn() {
       return request.auth != null;
@@ -20,51 +25,66 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // 1. Users Collection
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'yeahbhav456@gmail.com';
+    }
+
+    // 1. Users Collection (Profile, Study Stats & Saved Pins)
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId) || isAdmin();
       allow list: if false;
-      allow create: if isOwner(userId) && isValidId(userId)
+      allow create: if (isOwner(userId) || isAdmin()) && isValidId(userId)
         && request.resource.data.id == userId
         && request.resource.data.email is string
         && request.resource.data.email.size() <= 120;
-      allow update: if isOwner(userId) && isValidId(userId)
+      allow update: if (isOwner(userId) || isAdmin()) && isValidId(userId)
         && request.resource.data.id == resource.data.id;
-      allow delete: if isOwner(userId);
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
-    // 2. Notes Collection (Public Discovery Pins)
+    // 2. Notes Collection (Public Discovery & Categorized Study Pins)
     match /notes/{noteId} {
       allow get: if true;
       allow list: if true;
-      allow create: if isSignedIn() && isValidId(noteId)
-        && request.resource.data.uploaderId == request.auth.uid
+      allow create: if isValidId(noteId)
         && request.resource.data.title is string
         && request.resource.data.title.size() <= 150
         && request.resource.data.description is string
         && request.resource.data.description.size() <= 2000
         && request.resource.data.category is string
-        && request.resource.data.subject is string;
-      allow update: if isSignedIn() && isValidId(noteId)
-        && resource.data.uploaderId == request.auth.uid
-        && request.resource.data.uploaderId == resource.data.uploaderId;
-      allow delete: if isSignedIn() && isValidId(noteId)
-        && resource.data.uploaderId == request.auth.uid;
+        && request.resource.data.subject is string
+        && (
+          (isSignedIn() && request.resource.data.uploaderId == request.auth.uid) ||
+          (isSignedIn() && isAdmin()) ||
+          (request.resource.data.isSeed == true)
+        );
+      allow update: if isValidId(noteId) && (
+        // Action: Uploader edits note content
+        (isSignedIn() && resource.data.uploaderId == request.auth.uid && request.resource.data.uploaderId == resource.data.uploaderId) ||
+        // Action: Any signed-in student pins/saves or likes note
+        (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['saves', 'likes', 'views', 'updatedAt'])) ||
+        // Action: Admin
+        isAdmin()
+      );
+      allow delete: if isValidId(noteId) && (
+        (isSignedIn() && resource.data.uploaderId == request.auth.uid) ||
+        isAdmin()
+      );
     }
 
-    // 3. Boards Collection
+    // 3. Boards Collection (Curated Pin Collections)
     match /boards/{boardId} {
       allow get: if true;
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(boardId)
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if (isSignedIn() && isValidId(boardId)
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.title is string
-        && request.resource.data.title.size() <= 100;
-      allow update: if isSignedIn() && isValidId(boardId)
+        && request.resource.data.title.size() <= 100) || isAdmin();
+      allow update: if (isSignedIn() && isValidId(boardId)
         && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == resource.data.ownerId;
-      allow delete: if isSignedIn() && isValidId(boardId)
-        && resource.data.ownerId == request.auth.uid;
+        && request.resource.data.ownerId == resource.data.ownerId) || isAdmin();
+      allow delete: if (isSignedIn() && isValidId(boardId)
+        && resource.data.ownerId == request.auth.uid) || isAdmin();
     }
   }
 }

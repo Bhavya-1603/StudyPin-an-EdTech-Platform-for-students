@@ -1,5 +1,10 @@
 import { initializeApp, getApps } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
+import {
+  initializeFirestore,
+  getFirestore,
+  doc,
+  getDocFromServer,
+} from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 import configFromFile from './firebase-applet-config.json'
 
@@ -21,8 +26,28 @@ try {
   if (firebaseConfig.apiKey && firebaseConfig.projectId) {
     app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
     if (app) {
-      db = getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      try {
+        db = initializeFirestore(
+          app,
+          {
+            experimentalAutoDetectLongPolling: true,
+            experimentalForceLongPolling: true,
+          },
+          firebaseConfig.firestoreDatabaseId
+        )
+      } catch {
+        db = getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      }
       auth = getAuth(app)
+
+      // Test connection as instructed by Firebase integration guidelines
+      if (db) {
+        getDocFromServer(doc(db, 'test', 'connection')).catch((error) => {
+          if (error instanceof Error && error.message.includes('the client is offline')) {
+            console.error('Please check your Firebase configuration.')
+          }
+        })
+      }
     }
   }
 } catch (e) {

@@ -1,3 +1,6 @@
+import dotenv from 'dotenv'
+dotenv.config({ override: true })
+
 import { app } from './backend/src/server.js'
 import { createServer as createViteServer } from 'vite'
 import express from 'express'

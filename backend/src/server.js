@@ -21,7 +21,7 @@ import { createRequireAuth } from './middleware/requireAuth.js'
 import { authRateLimiter } from './middleware/rateLimiter.js'
 import { errorHandler } from './middleware/errorHandler.js'
 
-dotenv.config()
+dotenv.config({ override: true })
 
 const app = express()
 app.set('trust proxy', 1)

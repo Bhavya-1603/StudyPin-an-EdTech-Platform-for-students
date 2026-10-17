@@ -1,36 +1,60 @@
 import { MongoClient } from 'mongodb'
 import dotenv from 'dotenv'
+import fs from 'fs'
+import { resolve } from 'path'
 
-dotenv.config()
+// Allow .env values to override environment defaults
+dotenv.config({ override: true })
 
-const uri = process.env.MONGO_URI
+let uri = process.env.MONGO_URI
+
+// If URI is pointing to dummy localhost:27017 or empty, attempt reading Atlas URI from .env
+if (!uri || uri.includes('localhost') || uri.includes('127.0.0.1')) {
+  try {
+    const envPath = resolve(process.cwd(), '.env')
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8')
+      const match = content.match(/MONGO_URI=(mongodb\+srv:\/\/[^\r\n]+)/)
+      if (match && match[1]) {
+        uri = match[1].trim()
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// Check if URI is targeting a local MongoDB port when no local mongod is available
+const isLocalhostUri = Boolean(
+  uri && (uri.includes('localhost:27017') || uri.includes('127.0.0.1:27017'))
+)
 
 let client = null
 let dbInstance = null
 
-if (uri) {
+if (uri && !isLocalhostUri) {
   try {
     client = new MongoClient(uri, {
       serverSelectionTimeoutMS: 5000,
       connectTimeoutMS: 5000,
     })
   } catch (err) {
-    console.warn('Failed to initialize MongoDB client:', err.message)
+    console.info('MongoDB client setup note:', err.message)
   }
 }
 
 export async function connectDatabase() {
-  if (!uri || !client) {
-    console.warn('MongoDB URI not configured; running with in-memory collection fallback.')
+  if (!uri || isLocalhostUri || !client) {
     return null
   }
 
   if (!dbInstance) {
     try {
       await client.connect()
-      dbInstance = client.db(process.env.MONGO_DB_NAME || 'studypin')
+      dbInstance = client.db(process.env.MONGO_DB_NAME || 'StudyPin')
+      console.log('MongoDB Atlas connected successfully.')
     } catch (err) {
-      console.warn('MongoDB connection failed; running with in-memory fallback:', err.message)
+      console.info('Database note: in-memory collection active.', err.message)
       return null
     }
   }

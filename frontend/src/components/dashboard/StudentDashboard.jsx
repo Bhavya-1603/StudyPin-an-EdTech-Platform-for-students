@@ -27,6 +27,7 @@ import { Button } from '../ui/Button'
 import { ROUTES } from '../../constants/routes'
 import { useAuthStore, useStore } from '../../store/useStore'
 import toast from 'react-hot-toast'
+import CentralStudyPinsDashboard from './CentralStudyPinsDashboard'
 
 export function inferClientCategory(subject = '', title = '', tags = []) {
   const text = `${subject} ${title} ${Array.isArray(tags) ? tags.join(' ') : tags}`.toLowerCase()
@@ -96,6 +97,7 @@ export default function StudentDashboard() {
   const loadNotes = useStore((state) => state.loadNotes)
   const loadSavedNotes = useStore((state) => state.loadSavedNotes)
 
+  const [primaryView, setPrimaryView] = useState('pins') // 'pins' | 'workspace'
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [activityFilter, setActivityFilter] = useState('all')
 
@@ -330,10 +332,62 @@ export default function StudentDashboard() {
         </section>
       )}
 
-      {/* 2. OVERVIEW STATISTICS */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card
-          title="Current Streak"
+      {/* 2. DASHBOARD VIEW SWITCHER */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-2.5 shadow-sm">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setPrimaryView('pins')}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition active:scale-95 ${
+              primaryView === 'pins'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+            }`}
+          >
+            <BookOpen size={14} />
+            <span>Study Pins & Categorized Notes</span>
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
+                primaryView === 'pins' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              Firestore
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPrimaryView('workspace')}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition active:scale-95 ${
+              primaryView === 'workspace'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+            }`}
+          >
+            <Calendar size={14} />
+            <span>Deadlines & Study Goals</span>
+            {activeDeadlinesCount > 0 && (
+              <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] text-white font-bold">
+                {activeDeadlinesCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 pr-2">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Real-time Cloud Firestore</span>
+        </div>
+      </div>
+
+      {primaryView === 'pins' ? (
+        <CentralStudyPinsDashboard />
+      ) : (
+        <>
+          {/* 3. OVERVIEW STATISTICS */}
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card
+              title="Current Streak"
           value={stats.streak || '1 Day'}
           trend={stats.streakTrend || 'Active study consistency'}
           description="Daily study activity tracked"
@@ -903,6 +957,8 @@ export default function StudentDashboard() {
           </section>
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }
